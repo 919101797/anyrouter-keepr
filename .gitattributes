@@ -1,0 +1,6 @@
+# GitHub always shows automatic "Source code" archives on releases.
+# Keep those archives from distributing the application source.
+* export-ignore
+
+LICENSE -export-ignore
+SOURCE_ARCHIVE_README.md -export-ignore

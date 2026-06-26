@@ -131,8 +131,8 @@ function createBrowserMockUpdate(): PendingAppUpdate | null {
   if (params.get("mockUpdate") !== "1") return null;
 
   return {
-    version: "0.1.7-test",
-    currentVersion: "0.1.6",
+    version: "0.1.8-test",
+    currentVersion: "0.1.7",
     date: new Date().toISOString(),
     body: "测试更新：验证发现更新、下载进度、安装完成和重启按钮状态。",
     async downloadAndInstall(onProgress) {

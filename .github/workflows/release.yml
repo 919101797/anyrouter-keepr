@@ -222,7 +222,7 @@ jobs:
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
           releaseName: "AnyRouter Keeper ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}"
-          releaseBody: "Signed desktop installers and updater metadata are attached below."
+          releaseBody: "Signed desktop installers and updater metadata are attached below. GitHub also shows automatic Source code archives; those are filtered and are not installation packages."
           releaseDraft: ${{ github.event_name == 'workflow_dispatch' && inputs.release_draft == 'true' || false }}
           prerelease: false
           includeUpdaterJson: true

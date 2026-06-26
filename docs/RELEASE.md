@@ -54,6 +54,12 @@ GitHub Release. The app checks:
 https://github.com/919101797/anyrouter-keepr/releases/latest/download/latest.json
 ```
 
+GitHub automatically displays `Source code (zip)` and
+`Source code (tar.gz)` links on every release. They cannot be removed from the
+GitHub release page. The repository `.gitattributes` filters those generated
+archives so they only contain a short notice and the license, not application
+source files.
+
 ## macOS Signing Secrets
 
 Without an Apple certificate the workflow uses ad-hoc signing on macOS. This is
@@ -89,8 +95,8 @@ only inside CI.
 ## Manual Release
 
 ```bash
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.1.7
+git push origin v0.1.7
 ```
 
 Or use the GitHub Actions tab and run the `Release` workflow manually. Manual
