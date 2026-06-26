@@ -67,7 +67,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -80,7 +84,7 @@ jobs:
           workspaces: src-tauri -> target
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Configure macOS signing
         if: runner.os == 'macOS'
@@ -174,4 +178,5 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+          tauriScript: pnpm tauri
           args: ${{ matrix.args }}

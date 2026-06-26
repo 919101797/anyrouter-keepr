@@ -48,6 +48,3 @@ signing/
 .DS_Store
 .idea/
 .vscode/
-
-# This project builds with npm ci in CI.
-pnpm-lock.yaml
