@@ -21,6 +21,7 @@ pub struct AppState {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
@@ -32,6 +33,10 @@ pub fn run() {
             None,
         ))
         .setup(|app| {
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+
             let db = Arc::new(Database::open_default()?);
             db.migrate()?;
             let scheduler = Arc::new(Mutex::new(SchedulerHandle::new(db.clone())));

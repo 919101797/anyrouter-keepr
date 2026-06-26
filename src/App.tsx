@@ -20,11 +20,13 @@ import { ProbeHistoryTable } from "./components/ProbeHistoryTable";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatStrip } from "./components/StatStrip";
 import { StatusHero } from "./components/StatusHero";
+import { UpdatePanel, UpdateStatusButton } from "./components/UpdatePanel";
 import { Badge } from "./components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { contextSizeLabel, effectiveModelValue, effortLabel } from "./lib/modelOptions";
 import { themeModeLabel, type ThemeMode } from "./lib/theme";
+import { useAppUpdater } from "./lib/useAppUpdater";
 import { useThemeMode } from "./lib/useThemeMode";
 import { useAppStore } from "./store/appStore";
 
@@ -59,6 +61,7 @@ export default function App() {
   const runtimeContext = contextSizeLabel(profile?.context_size);
   const promptPoolCount = profile?.prompt_pool?.filter((prompt) => prompt.trim()).length ?? 0;
   const { mode: themeMode, setThemeMode } = useThemeMode();
+  const updater = useAppUpdater();
   const [showStartupNotice, setShowStartupNotice] = useState(true);
 
   useEffect(() => {
@@ -89,6 +92,7 @@ export default function App() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <UpdateStatusButton updater={updater} />
               <ThemeCycleButton mode={themeMode} onChange={setThemeMode} />
               <Badge variant={claudeInstallation?.status === "ready" ? "success" : "warning"}>
                 <Terminal />
@@ -164,6 +168,7 @@ export default function App() {
           </div>
         </div>
         {showStartupNotice ? <StartupNotice onClose={() => setShowStartupNotice(false)} /> : null}
+        <UpdatePanel updater={updater} />
       </main>
     </TooltipProvider>
   );

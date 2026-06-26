@@ -368,6 +368,374 @@ button > svg {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-focus) 18%, transparent);
 }
 
+.update-status-button {
+  display: inline-flex;
+  height: 32px;
+  width: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--app-surface) 76%, transparent);
+  color: var(--app-text-muted);
+  outline: none;
+  backdrop-filter: blur(14px);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.update-status-button:hover,
+.update-status-button-active {
+  border-color: var(--app-focus);
+  background: var(--app-control-hover);
+  color: var(--app-text);
+  box-shadow: 0 10px 22px rgba(21, 154, 140, 0.1);
+  transform: translateY(-1px);
+}
+
+.update-status-button:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-focus) 18%, transparent);
+}
+
+.update-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    linear-gradient(90deg, rgba(18, 24, 21, 0.16), rgba(18, 24, 21, 0.28)),
+    linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+  background-size:
+    auto,
+    34px 34px,
+    34px 34px;
+  backdrop-filter: blur(14px) saturate(1.08);
+}
+
+:root[data-theme="dark"] .update-panel-overlay {
+  background:
+    linear-gradient(90deg, rgba(5, 10, 8, 0.72), rgba(5, 10, 8, 0.56)),
+    linear-gradient(rgba(207, 255, 78, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(84, 231, 219, 0.035) 1px, transparent 1px);
+  background-size:
+    auto,
+    34px 34px,
+    34px 34px;
+}
+
+.update-panel {
+  position: relative;
+  width: min(680px, 100%);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--app-border-strong) 70%, transparent);
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--app-surface) 94%, transparent),
+      var(--app-surface-muted)
+    ),
+    var(--app-surface);
+  padding: 24px;
+  color: var(--app-text);
+  box-shadow:
+    0 26px 80px rgba(17, 24, 21, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.46);
+}
+
+:root[data-theme="dark"] .update-panel {
+  box-shadow:
+    0 26px 80px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.update-panel::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background:
+    linear-gradient(
+      120deg,
+      transparent 0 18%,
+      color-mix(in srgb, var(--app-focus) 13%, transparent) 18% 19%,
+      transparent 19% 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--app-text) 5%, transparent) 0,
+      color-mix(in srgb, var(--app-text) 5%, transparent) 1px,
+      transparent 1px,
+      transparent 18px
+    );
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.update-panel-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  display: inline-flex;
+  height: 30px;
+  width: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--app-text-muted);
+  outline: none;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.update-panel-close:hover:not(:disabled) {
+  background: var(--app-control-hover);
+  color: var(--app-text);
+  transform: translateY(-1px);
+}
+
+.update-panel-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.update-panel-close:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-focus) 18%, transparent);
+}
+
+.update-panel-icon {
+  display: inline-flex;
+  height: 46px;
+  width: 46px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--app-focus) 40%, var(--app-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--app-accent) 76%, var(--app-surface));
+  color: #121815;
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--app-focus) 16%, transparent);
+}
+
+.update-panel-scan {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.update-panel-scan span {
+  position: absolute;
+  left: -20%;
+  width: 140%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--app-focus) 42%, transparent),
+    transparent
+  );
+  opacity: 0.5;
+  animation: update-panel-scan 4.8s linear infinite;
+}
+
+.update-panel-scan span:nth-child(1) {
+  top: 18%;
+}
+
+.update-panel-scan span:nth-child(2) {
+  top: 52%;
+  animation-delay: 1.5s;
+}
+
+.update-panel-scan span:nth-child(3) {
+  top: 78%;
+  animation-delay: 3s;
+}
+
+.update-version-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.update-version-fact {
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-surface-muted) 82%, transparent);
+  padding: 10px 12px;
+}
+
+.update-version-fact div {
+  color: var(--app-text-soft);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.update-version-fact strong {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--app-text);
+  font-family: "IBM Plex Mono", "SF Mono", "Cascadia Code", "Menlo", monospace;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-version-fact-accent {
+  border-color: color-mix(in srgb, var(--app-focus) 48%, var(--app-border));
+  background: color-mix(in srgb, var(--app-focus) 10%, var(--app-surface));
+}
+
+.update-notes {
+  max-height: 130px;
+  overflow: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-surface-muted) 72%, transparent);
+  padding: 12px;
+}
+
+.update-notes-label {
+  margin-bottom: 6px;
+  color: var(--app-text-soft);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.update-notes p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.update-progress-block {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-surface-muted) 72%, transparent);
+  padding: 12px;
+}
+
+.update-progress-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-border) 68%, transparent);
+}
+
+.update-progress-fill {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  min-width: 10px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #159a8c, #cfff4e), var(--app-focus);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--app-focus) 40%, transparent);
+  transition: width 260ms ease;
+}
+
+.update-progress-fill::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  animation: update-progress-sheen 1.5s linear infinite;
+}
+
+.update-progress-indeterminate .update-progress-fill {
+  width: 38%;
+  animation: update-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+.update-error {
+  border: 1px solid #f0a3af;
+  border-radius: 8px;
+  background: #ffe0e5;
+  padding: 10px 12px;
+  color: #8f1d31;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+:root[data-theme="dark"] .update-error {
+  border-color: rgba(240, 163, 175, 0.4);
+  background: rgba(143, 29, 49, 0.22);
+  color: #ffd8df;
+}
+
+@keyframes update-progress-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes update-progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  55% {
+    transform: translateX(115%);
+  }
+
+  100% {
+    transform: translateX(115%);
+  }
+}
+
+@keyframes update-panel-scan {
+  from {
+    transform: translateY(-24px);
+    opacity: 0;
+  }
+
+  20%,
+  70% {
+    opacity: 0.5;
+  }
+
+  to {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .update-panel {
+    padding: 20px;
+  }
+
+  .update-version-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .prompt-pool-editor {
   display: grid;
   gap: 10px;

@@ -18,6 +18,38 @@ In GitHub, open `Settings -> Actions -> General` and make sure workflow
 permissions allow `Read and write permissions`, or keep the workflow-level
 `contents: write` permission enabled.
 
+## Updater Signing Secrets
+
+The in-app updater uses Tauri's signed update flow. The public key is committed
+in `src-tauri/tauri.conf.json`; the private key must stay out of git and be
+stored as a GitHub Actions secret.
+
+The local private key generated for this app is:
+
+```bash
+~/.tauri/anyrouter-keepr-updater.key
+```
+
+Add these repository secrets before pushing a release tag:
+
+| Secret                               | Description                                                  |
+| ------------------------------------ | ------------------------------------------------------------ |
+| `TAURI_SIGNING_PRIVATE_KEY`          | The full contents of `~/.tauri/anyrouter-keepr-updater.key`. |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Optional. Empty for the currently generated no-password key. |
+
+Example with GitHub CLI:
+
+```bash
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/anyrouter-keepr-updater.key
+```
+
+The release workflow uploads Tauri's `latest.json` updater metadata to the
+GitHub Release. The app checks:
+
+```text
+https://github.com/919101797/anyrouter-keepr/releases/latest/download/latest.json
+```
+
 ## macOS Signing Secrets
 
 Without an Apple certificate the workflow uses ad-hoc signing on macOS. This is
@@ -53,8 +85,8 @@ only inside CI.
 ## Manual Release
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 Or use the GitHub Actions tab and run the `Release` workflow manually. Manual
