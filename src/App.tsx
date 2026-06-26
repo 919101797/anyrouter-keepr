@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   Clock4,
   Cpu,
-  DatabaseZap,
   HardDrive,
   Monitor,
   Moon,
@@ -79,9 +78,11 @@ export default function App() {
         <div className="mx-auto flex min-h-full max-w-[1500px] flex-col gap-4">
           <header className="flex flex-col gap-3 rounded-[10px] border border-[#d2ded7] bg-white/[0.82] px-4 py-3 shadow-[0_14px_42px_rgba(36,55,47,0.08)] backdrop-blur md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#121815] text-[#cfff4e]">
-                <DatabaseZap className="h-5 w-5" />
-              </div>
+              <img
+                src="/desktopIcon.png"
+                alt="AnyRouter Keeper"
+                className="h-10 w-10 shrink-0 rounded-[8px] object-cover shadow-[0_8px_22px_rgba(17,24,21,0.16)]"
+              />
               <div className="min-w-0">
                 <div className="truncate text-base font-bold tracking-normal">AnyRouter Keeper</div>
                 <div className="mt-0.5 text-xs font-medium text-[#617369]">Claude Code activity console</div>

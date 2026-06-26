@@ -53,8 +53,8 @@ only inside CI.
 ## Manual Release
 
 ```bash
-git tag app-v0.1.0
-git push origin app-v0.1.0
+git tag app-v0.1.1
+git push origin app-v0.1.1
 ```
 
 Or use the GitHub Actions tab and run the `Release` workflow manually. Manual
