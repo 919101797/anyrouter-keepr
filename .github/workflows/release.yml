@@ -34,11 +34,11 @@ jobs:
         include:
           - label: "macOS Apple Silicon"
             platform: macos-latest
-            args: "--target aarch64-apple-darwin --bundles dmg"
+            args: "--target aarch64-apple-darwin --bundles app,dmg"
             rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
           - label: "macOS Intel"
             platform: macos-latest
-            args: "--target x86_64-apple-darwin --bundles dmg"
+            args: "--target x86_64-apple-darwin --bundles app,dmg"
             rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
           - label: "Windows x64"
             platform: windows-latest

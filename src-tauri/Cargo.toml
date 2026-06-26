@@ -1,6 +1,6 @@
 [package]
 name = "anyrouter-claude-keeper"
-version = "0.1.5"
+version = "0.1.6"
 description = "AnyRouter Claude Code activity keeper"
 authors = ["chaochen"]
 edition = "2021"
