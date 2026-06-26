@@ -82,7 +82,7 @@ export default function App() {
           <header className="flex flex-col gap-3 rounded-[10px] border border-[#d2ded7] bg-white/[0.82] px-4 py-3 shadow-[0_14px_42px_rgba(36,55,47,0.08)] backdrop-blur md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <img
-                src="/desktopIcon.png"
+                src="/app-icon.png"
                 alt="AnyRouter Keeper"
                 className="h-10 w-10 shrink-0 rounded-[8px] object-cover shadow-[0_8px_22px_rgba(17,24,21,0.16)]"
               />
