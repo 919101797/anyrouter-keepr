@@ -43,6 +43,10 @@ Example with GitHub CLI:
 gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/anyrouter-keepr-updater.key
 ```
 
+Prefer the command above over manual copy/paste. A copied terminal prompt
+character such as `%` at the end of the key will make updater signing fail with
+`failed to decode base64 secret key`.
+
 The release workflow uploads Tauri's `latest.json` updater metadata to the
 GitHub Release. The app checks:
 
@@ -85,8 +89,8 @@ only inside CI.
 ## Manual Release
 
 ```bash
-git tag v0.1.4
-git push origin v0.1.4
+git tag v0.1.5
+git push origin v0.1.5
 ```
 
 Or use the GitHub Actions tab and run the `Release` workflow manually. Manual

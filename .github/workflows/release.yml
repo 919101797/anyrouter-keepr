@@ -86,6 +86,32 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          node <<'NODE'
+          const key = process.env.TAURI_SIGNING_PRIVATE_KEY || "";
+          const resetMessage =
+            "Reset it with: gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/anyrouter-keepr-updater.key";
+
+          if (!key) {
+            console.error("TAURI_SIGNING_PRIVATE_KEY is required for updater artifacts.");
+            process.exit(1);
+          }
+
+          if (key !== key.trim()) {
+            console.error(`TAURI_SIGNING_PRIVATE_KEY contains leading or trailing whitespace. ${resetMessage}`);
+            process.exit(1);
+          }
+
+          if (!/^[A-Za-z0-9+/=]+$/.test(key)) {
+            console.error(`TAURI_SIGNING_PRIVATE_KEY must be the raw one-line base64 private key. ${resetMessage}`);
+            process.exit(1);
+          }
+          NODE
+
       - name: Configure macOS signing
         if: runner.os == 'macOS'
         env:
