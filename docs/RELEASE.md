@@ -85,8 +85,8 @@ only inside CI.
 ## Manual Release
 
 ```bash
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 Or use the GitHub Actions tab and run the `Release` workflow manually. Manual

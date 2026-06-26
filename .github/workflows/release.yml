@@ -121,6 +121,32 @@ jobs:
 
           echo "APPLE_SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
 
+      - name: Configure macOS notarization
+        if: runner.os == 'macOS'
+        env:
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_SECRET: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APPLE_ID_SECRET}" ] || [ -z "${APPLE_PASSWORD_SECRET}" ] || [ "${#APPLE_TEAM_ID_SECRET}" -lt 3 ]; then
+            echo "Apple notarization secrets are incomplete; skipping notarization."
+            exit 0
+          fi
+
+          {
+            echo "APPLE_ID<<EOF"
+            echo "$APPLE_ID_SECRET"
+            echo "EOF"
+            echo "APPLE_PASSWORD<<EOF"
+            echo "$APPLE_PASSWORD_SECRET"
+            echo "EOF"
+            echo "APPLE_TEAM_ID<<EOF"
+            echo "$APPLE_TEAM_ID_SECRET"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Import Windows signing certificate
         if: runner.os == 'Windows'
         shell: pwsh
@@ -167,9 +193,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
           releaseName: "AnyRouter Keeper ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}"
