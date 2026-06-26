@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Frontend/build output
+dist/
+target/
+src-tauri/target/
+src-tauri/.tauri/
+*.tsbuildinfo
+.cache/
+.turbo/
+
+# Local runtime data
+*.log
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Secrets and signing material
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.mobileprovision
+certificate/
+certificates/
+signing/
+
+# Generated installers and archives
+*.AppImage
+*.app.tar.gz
+*.deb
+*.dmg
+*.exe
+*.msi
+*.rpm
+*.zip
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# This project builds with npm ci in CI.
+pnpm-lock.yaml
