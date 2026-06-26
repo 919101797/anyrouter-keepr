@@ -9,8 +9,8 @@ macOS, Windows, and Linux.
   on pushes and pull requests to `main`.
 - `Release` builds desktop installers and uploads them to a GitHub Release.
 
-The release workflow can be started from the GitHub Actions tab with
-`workflow_dispatch`. It also runs when a tag matching `app-v*` is pushed.
+The release workflow runs automatically when any git tag is pushed. It can also
+be started from the GitHub Actions tab with `workflow_dispatch`.
 
 ## Required Repository Settings
 
@@ -53,9 +53,9 @@ only inside CI.
 ## Manual Release
 
 ```bash
-git tag app-v0.1.1
-git push origin app-v0.1.1
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 Or use the GitHub Actions tab and run the `Release` workflow manually. Manual
-runs default to a draft release.
+runs require a `release_tag` input and default to a draft release.

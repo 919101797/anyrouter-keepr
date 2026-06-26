@@ -3,6 +3,11 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: "Release tag to create/use for manual builds"
+        required: true
+        default: "manual-build"
+        type: string
       release_draft:
         description: "Create the GitHub release as a draft"
         required: true
@@ -13,7 +18,7 @@ on:
           - "false"
   push:
     tags:
-      - "app-v*"
+      - "**"
 
 permissions:
   contents: write
@@ -160,8 +165,8 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: "AnyRouter Keeper v__VERSION__"
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+          releaseName: "AnyRouter Keeper ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}"
           releaseBody: "See the assets below to download this version."
           releaseDraft: ${{ github.event_name == 'workflow_dispatch' && inputs.release_draft == 'true' || false }}
           prerelease: false
