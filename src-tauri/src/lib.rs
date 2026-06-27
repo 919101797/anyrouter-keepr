@@ -23,10 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            system::window::show_main_window(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -73,7 +70,7 @@ pub fn run() {
                     });
                 }
                 api.prevent_close();
-                let _ = window.hide();
+                system::window::hide_to_background(window);
             }
         })
         .run(tauri::generate_context!())

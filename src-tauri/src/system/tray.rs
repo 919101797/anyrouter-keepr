@@ -17,10 +17,7 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
         .tooltip("AnyRouter Keeper")
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                crate::system::window::show_main_window(app);
             }
             "quit" => {
                 if let Some(state) = app.try_state::<AppState>() {
