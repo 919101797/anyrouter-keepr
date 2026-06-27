@@ -1,4 +1,4 @@
-import { Check, Clock3, Pause, Play, RotateCw, SatelliteDish, Terminal, X, Zap } from "lucide-react";
+import { Check, Clock3, Pause, Play, Radar, RotateCw, ScanSearch, Terminal, X } from "lucide-react";
 import { useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { Button } from "./ui/button";
@@ -143,7 +143,7 @@ export function StatusHero({
             <div
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] ${tone.accent}`}
             >
-              <SatelliteDish className="h-6 w-6" />
+              <Radar className="h-6 w-6" />
             </div>
             <div className="min-w-0">
               <div className="status-hero-eyebrow truncate text-sm font-semibold">{endpoint}</div>
@@ -264,7 +264,7 @@ export function StatusHero({
               {running ? "暂停守护" : "开始守护"}
             </Button>
             <Button onClick={onProbe} disabled={busy} variant="outline" className="status-hero-probe-button">
-              {busy ? <RotateCw className="animate-spin" /> : <Zap />}
+              {busy ? <RotateCw className="animate-spin" /> : <ScanSearch />}
               探测一次
             </Button>
           </div>

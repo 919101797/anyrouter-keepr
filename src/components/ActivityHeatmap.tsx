@@ -1,4 +1,4 @@
-import { Activity } from "lucide-react";
+import { ChartNoAxesColumnIncreasing } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import type { ActivityBucket, ProbeStatus } from "../lib/types";
 import { cn, formatClock, formatDuration } from "../lib/utils";
@@ -49,8 +49,8 @@ export function ActivityHeatmap({ buckets, anchorTime }: ActivityHeatmapProps) {
       <div className="panel-ring rounded-[8px] border border-[#d2ded7] bg-white p-5">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[7px] bg-[#e6f8ee] text-[#177448]">
-              <Activity className="h-4 w-4" />
+            <div className="activity-heatmap-icon">
+              <ChartNoAxesColumnIncreasing className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-[#121815]">24 小时活性</h2>

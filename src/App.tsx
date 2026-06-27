@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import type { ComponentType } from "react";
 import {
-  AlertTriangle,
+  BrainCircuit,
+  CircleAlert,
   Clock4,
-  Cpu,
   HardDrive,
+  Hourglass,
   Monitor,
   Moon,
-  Network,
+  NotebookTabs,
   Power,
+  Route,
   Shuffle,
+  SlidersHorizontal,
   Sun,
   Terminal,
   Timer,
@@ -213,7 +216,7 @@ function StartupNotice({ onClose }: { onClose: () => void }) {
           <X className="h-4 w-4" />
         </button>
         <div className="startup-notice-icon">
-          <AlertTriangle className="h-5 w-5" />
+          <CircleAlert className="h-5 w-5" />
         </div>
         <div className="min-w-0">
           <h2 id="startup-notice-title" className="text-lg font-black tracking-normal text-[#121815]">
@@ -268,16 +271,16 @@ function RuntimePanel({
       <div className="divide-y divide-[#edf3ef]">
         <Rule icon={Clock4} label="时间窗口" value={window} />
         <Rule icon={Terminal} label="Claude CLI" value={claudePath} />
-        <Rule icon={Network} label="Endpoint" value={endpoint} />
-        <Rule icon={Cpu} label="Model" value={model} />
-        <Rule icon={Cpu} label="推理强度" value={effort} />
-        <Rule icon={Cpu} label="上下文" value={context} />
+        <Rule icon={Route} label="Endpoint" value={endpoint} />
+        <Rule icon={BrainCircuit} label="Model" value={model} />
+        <Rule icon={SlidersHorizontal} label="推理强度" value={effort} />
+        <Rule icon={NotebookTabs} label="上下文" value={context} />
         <Rule icon={Timer} label="随机间隔" value={interval} />
         <Rule icon={Shuffle} label="提示词池" value={promptPool} />
-        <Rule icon={AlertTriangle} label="错误策略" value="429 / 503 / 524 / reset / overloaded 继续抢" />
+        <Rule icon={CircleAlert} label="错误策略" value="429 / 503 / 524 / reset / overloaded 继续抢" />
         <Rule icon={HardDrive} label="写盘策略" value="事件 buffer 批量 flush，不记录 tick" />
         <Rule icon={Power} label="开机自启" value={autostart ? "已开启" : "未开启"} />
-        <Rule icon={Timer} label="超时" value={timeout} />
+        <Rule icon={Hourglass} label="超时" value={timeout} />
       </div>
     </div>
   );
@@ -294,7 +297,7 @@ function Rule({
 }) {
   return (
     <div className="grid grid-cols-[32px_minmax(0,1fr)] items-start gap-3 px-5 py-3.5">
-      <div className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-[#eef4f1] text-[#52645b]">
+      <div className="runtime-rule-icon">
         <Icon className="h-4 w-4" />
       </div>
       <div className="min-w-0">

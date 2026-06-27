@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ComponentProps, ComponentType, KeyboardEvent, ReactNode } from "react";
-import { AlertTriangle, RefreshCw, Save, X } from "lucide-react";
+import { CircleAlert, RefreshCw, Save, X } from "lucide-react";
 import {
   CLAUDE_MODEL_OPTIONS,
   CONTEXT_SIZE_OPTIONS,
@@ -195,7 +195,7 @@ export function SettingsPanel({
             </Field>
 
             {claudeInstallation?.error ? (
-              <InlineNotice tone="warning" icon={AlertTriangle}>
+              <InlineNotice tone="warning" icon={CircleAlert}>
                 {claudeInstallation.error}
               </InlineNotice>
             ) : null}

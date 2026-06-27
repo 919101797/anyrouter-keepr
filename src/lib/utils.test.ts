@@ -25,6 +25,8 @@ describe("ui utility formatting", () => {
   it("maps statuses to Chinese labels", () => {
     expect(statusLabel("success")).toBe("已联通");
     expect(statusLabel("queue_miss")).toBe("抢占中");
+    expect(statusLabel("probing")).toBe("探测中");
     expect(statusLabel("config_error")).toBe("配置错误");
+    expect(statusLabel("unknown")).toBe("未判定");
   });
 });

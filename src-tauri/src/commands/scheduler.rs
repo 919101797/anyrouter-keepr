@@ -2,18 +2,39 @@ use tauri::State;
 
 use crate::core::scheduler::derive_status;
 use crate::core::types::AppStatus;
+use crate::system::app_log;
 use crate::AppState;
 
 #[tauri::command]
 pub async fn start_scheduler(state: State<'_, AppState>) -> Result<(), String> {
+    app_log::info("start_scheduler", "requested");
     let mut scheduler = state.scheduler.lock().await;
-    scheduler.start().await
+    match scheduler.start().await {
+        Ok(()) => {
+            app_log::info("start_scheduler", "ok");
+            Ok(())
+        }
+        Err(error) => {
+            app_log::error("start_scheduler", &error);
+            Err(error)
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn pause_scheduler(state: State<'_, AppState>) -> Result<(), String> {
+    app_log::info("pause_scheduler", "requested");
     let mut scheduler = state.scheduler.lock().await;
-    scheduler.pause().await
+    match scheduler.pause().await {
+        Ok(()) => {
+            app_log::info("pause_scheduler", "ok");
+            Ok(())
+        }
+        Err(error) => {
+            app_log::error("pause_scheduler", &error);
+            Err(error)
+        }
+    }
 }
 
 #[tauri::command]

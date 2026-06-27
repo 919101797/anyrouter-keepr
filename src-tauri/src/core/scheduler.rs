@@ -12,6 +12,7 @@ use crate::core::claude_runner::{claude_not_found_event, run_probe};
 use crate::core::time_window::{seconds_until, TimeWindow};
 use crate::core::types::{AppStatus, ProbeEventDto, ProbeStatus};
 use crate::storage::db::Database;
+use crate::system::app_log;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeStatus {
@@ -57,17 +58,29 @@ impl SchedulerHandle {
             .db
             .get_runtime_profile()
             .map_err(|err| err.to_string())?;
-        if let Err(error) = resolve_claude_binary(&profile.claude_binary_path).await {
-            let event = claude_not_found_event(&profile, &error.message);
-            self.db.push_event(event).map_err(|err| err.to_string())?;
-            self.db.flush_buffer().map_err(|err| err.to_string())?;
-            self.update_status(|status| {
-                status.running = false;
-                status.in_window = false;
-                status.current_state = "config_error".to_string();
-                status.next_probe_at = None;
-            });
-            return Err(error.message);
+        match resolve_claude_binary(&profile.claude_binary_path).await {
+            Ok(resolution) => {
+                app_log::info(
+                    "scheduler.start",
+                    format!(
+                        "claude source={} effective_path={}",
+                        resolution.source, resolution.effective_path
+                    ),
+                );
+            }
+            Err(error) => {
+                app_log::error("scheduler.start.resolve_claude", &error.message);
+                let event = claude_not_found_event(&profile, &error.message);
+                self.db.push_event(event).map_err(|err| err.to_string())?;
+                self.db.flush_buffer().map_err(|err| err.to_string())?;
+                self.update_status(|status| {
+                    status.running = false;
+                    status.in_window = false;
+                    status.current_state = "config_error".to_string();
+                    status.next_probe_at = None;
+                });
+                return Err(error.message);
+            }
         }
 
         self.db.set_enabled(true).map_err(|err| err.to_string())?;
@@ -85,7 +98,8 @@ impl SchedulerHandle {
             loop {
                 let profile = match db.get_runtime_profile() {
                     Ok(profile) => profile,
-                    Err(_) => {
+                    Err(error) => {
+                        app_log::error("scheduler.loop.get_profile", error.to_string());
                         sleep(Duration::from_secs(30)).await;
                         continue;
                     }
@@ -97,7 +111,8 @@ impl SchedulerHandle {
 
                 let window = match TimeWindow::parse(&profile.start_time, &profile.end_time) {
                     Ok(window) => window,
-                    Err(_) => {
+                    Err(error) => {
+                        app_log::error("scheduler.loop.time_window", error);
                         let _ = db.set_enabled(false);
                         set_runtime_status(&runtime_status, |status| {
                             status.running = false;
@@ -135,6 +150,16 @@ impl SchedulerHandle {
 
                 let event = run_probe(&profile).await;
                 let should_stop = event.status == ProbeStatus::ConfigError;
+                app_log::info(
+                    "scheduler.probe",
+                    format!(
+                        "status={} error={:?} duration_ms={} model={}",
+                        event.status.as_str(),
+                        event.error_kind,
+                        event.duration_ms,
+                        event.model
+                    ),
+                );
                 let event_state = match event.status {
                     ProbeStatus::Success => "connected",
                     ProbeStatus::QueueMiss | ProbeStatus::Timeout => "racing",
@@ -233,6 +258,8 @@ pub fn derive_status(
 ) -> AppStatus {
     let current_state = if runtime.current_state == "sleeping" {
         "sleeping".to_string()
+    } else if runtime.current_state == "probing" {
+        "probing".to_string()
     } else if !runtime.running {
         "paused".to_string()
     } else if let Some(event) = last_event.as_ref() {
@@ -353,5 +380,41 @@ mod tests {
             events[0].status,
             ProbeStatus::Success | ProbeStatus::QueueMiss | ProbeStatus::Timeout
         ));
+    }
+
+    #[test]
+    fn derive_status_preserves_active_probing_state() {
+        let now = Local::now().to_rfc3339();
+        let status = derive_status(
+            "default".to_string(),
+            RuntimeStatus {
+                running: true,
+                next_probe_at: None,
+                current_state: "probing".to_string(),
+                in_window: true,
+            },
+            Some(ProbeEventDto {
+                id: "event-1".to_string(),
+                profile_id: "default".to_string(),
+                started_at: now.clone(),
+                ended_at: now,
+                duration_ms: 10,
+                status: ProbeStatus::Unknown,
+                error_kind: Some("unknown".to_string()),
+                exit_code: None,
+                base_url: String::new(),
+                model: "claude-opus-4-8[1M]".to_string(),
+                prompt_summary: None,
+                prompt_truncated: false,
+                stdout_summary: None,
+                stderr_summary: None,
+                stdout_truncated: false,
+                stderr_truncated: false,
+            }),
+            None,
+            0,
+        );
+
+        assert_eq!(status.current_state, "probing");
     }
 }

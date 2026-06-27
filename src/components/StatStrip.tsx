@@ -1,4 +1,11 @@
-import { Activity, Gauge, History, RadioTower, TimerReset, Waves } from "lucide-react";
+import {
+  ChartNoAxesColumnIncreasing,
+  ChartSpline,
+  CircleCheckBig,
+  Gauge,
+  Hourglass,
+  RadioReceiver,
+} from "lucide-react";
 import type { ComponentType } from "react";
 import { formatDuration, formatLongDuration, formatRelativeTime } from "../lib/utils";
 import type { AppStatus, ProbeEvent } from "../lib/types";
@@ -28,7 +35,7 @@ export function StatStrip({ status, events }: StatStripProps) {
     {
       label: "最近成功",
       value: formatRelativeTime(status?.last_success_at),
-      icon: History,
+      icon: CircleCheckBig,
     },
     {
       label: "最近耗时",
@@ -38,22 +45,22 @@ export function StatStrip({ status, events }: StatStripProps) {
     {
       label: "连续抢占",
       value: String(status?.consecutive_queue_miss ?? 0),
-      icon: RadioTower,
+      icon: RadioReceiver,
     },
     {
       label: "近端成功率",
       value: `${successRate}%`,
-      icon: Activity,
+      icon: ChartNoAxesColumnIncreasing,
     },
     {
       label: "抢占占比",
       value: `${queueMissRate}%`,
-      icon: Waves,
+      icon: ChartSpline,
     },
     {
       label: "最长未成功",
       value: formatLongDuration(longestNoSuccessMs),
-      icon: TimerReset,
+      icon: Hourglass,
     },
   ];
 
@@ -90,7 +97,7 @@ function StatCard({
           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6a7d73]">{label}</div>
           <div className="mt-3 truncate text-2xl font-black tracking-normal text-[#17211d]">{value}</div>
         </div>
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[7px] ${tone}`}>
+        <div className={`stat-card-icon ${tone}`}>
           <Icon className="h-4 w-4" />
         </div>
       </div>

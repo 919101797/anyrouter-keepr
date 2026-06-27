@@ -53,12 +53,14 @@ pub fn classify(
     }
 
     for marker in [
+        "api_retry",
         "econnreset",
         "etimedout",
         "overloaded",
         "server busy",
         "network reset",
         "temporarily unavailable",
+        "rate_limit",
         "rate limit",
         "too many requests",
         "gateway timeout",
@@ -87,6 +89,7 @@ fn contains_http_code(text: &str, code: &str) -> bool {
         || text.contains(&format!("status code {code}"))
         || text.contains(&format!("status: {code}"))
         || text.contains(&format!("\"status\":{code}"))
+        || text.contains(&format!("\"error_status\":{code}"))
         || text.contains(&format!(" {code} "))
 }
 
@@ -112,6 +115,18 @@ mod tests {
     fn treats_429_as_queue_miss() {
         let result = classify(Some(1), false, "", "API Error: 429 status code");
         assert_eq!(result.status, ProbeStatus::QueueMiss);
+    }
+
+    #[test]
+    fn treats_claude_stream_retry_as_queue_miss() {
+        let result = classify(
+            None,
+            false,
+            r#"{"type":"system","subtype":"api_retry","error_status":429,"error":"rate_limit"}"#,
+            "",
+        );
+        assert_eq!(result.status, ProbeStatus::QueueMiss);
+        assert_eq!(result.error_kind.as_deref(), Some("429"));
     }
 
     #[test]

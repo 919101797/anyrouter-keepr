@@ -185,6 +185,46 @@ button > svg {
     0 18px 48px rgba(36, 55, 47, 0.08);
 }
 
+.stat-card-icon,
+.activity-heatmap-icon,
+.runtime-rule-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+.stat-card-icon,
+.activity-heatmap-icon {
+  height: 36px;
+  width: 36px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 10px 22px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.stat-card-icon svg,
+.activity-heatmap-icon svg,
+.runtime-rule-icon svg {
+  stroke-width: 2.1;
+}
+
+.activity-heatmap-icon {
+  background: #e6f8ee;
+  color: #177448;
+}
+
+.runtime-rule-icon {
+  height: 32px;
+  width: 32px;
+  border: 1px solid color-mix(in srgb, var(--app-border-strong) 70%, transparent);
+  background: color-mix(in srgb, var(--app-surface-raised) 72%, var(--app-surface));
+  color: var(--app-text-muted);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54);
+}
+
 .status-hero {
   border-color: var(--hero-border);
   background:
@@ -282,6 +322,18 @@ button > svg {
   background: var(--app-control-hover-strong) !important;
   color: var(--hero-text) !important;
   transform: translateY(-1px);
+}
+
+.status-pill {
+  min-width: 76px;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.status-pill svg {
+  stroke-width: 2.15;
 }
 
 .theme-mode-button {
@@ -880,6 +932,20 @@ button > svg {
   color: var(--app-text) !important;
 }
 
+.history-filter-active {
+  box-shadow: 0 12px 28px rgba(17, 24, 21, 0.16);
+}
+
+.history-filter-active svg {
+  color: #cfff4e;
+}
+
+.history-status-cell {
+  display: inline-flex;
+  min-width: 86px;
+  align-items: center;
+}
+
 .history-text-cell {
   color: var(--app-text-muted);
 }
@@ -994,6 +1060,18 @@ button > svg {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.05) inset,
     0 22px 56px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="dark"] .stat-card-icon,
+:root[data-theme="dark"] .activity-heatmap-icon {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 22px rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme="dark"] .runtime-rule-icon {
+  border-color: var(--app-border-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 :root[data-theme="dark"] .theme-mode-button-active {

@@ -3,9 +3,9 @@ use std::time::Duration as StdDuration;
 
 use chrono::Local;
 use rand::seq::SliceRandom;
-use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
-use tokio::time::timeout;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{Child, ChildStdout, Command};
+use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::core::classifier::classify;
@@ -13,6 +13,7 @@ use crate::core::claude_installation::{apply_claude_command_path, resolve_claude
 use crate::core::claude_runtime_config::detect_claude_runtime_config;
 use crate::core::redactor::summarize_and_redact;
 use crate::core::types::{ProbeEvent, ProbeStatus, Profile};
+use crate::system::app_log;
 
 const FALLBACK_PROMPT: &str = "只回复 OK";
 const MAX_PROMPT_CHARS: usize = 1_000;
@@ -20,8 +21,20 @@ const MAX_PROMPT_SUMMARY_BYTES: usize = 1_024;
 
 pub async fn run_probe(profile: &Profile) -> ProbeEvent {
     match resolve_claude_binary(&profile.claude_binary_path).await {
-        Ok(resolution) => run_probe_with_binary(profile, &resolution.effective_path).await,
-        Err(error) => claude_not_found_event(profile, &error.message),
+        Ok(resolution) => {
+            app_log::info(
+                "run_probe.resolve_claude",
+                format!(
+                    "source={} effective_path={}",
+                    resolution.source, resolution.effective_path
+                ),
+            );
+            run_probe_with_binary(profile, &resolution.effective_path).await
+        }
+        Err(error) => {
+            app_log::error("run_probe.resolve_claude", &error.message);
+            claude_not_found_event(profile, &error.message)
+        }
     }
 }
 
@@ -44,6 +57,14 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
     let token = profile.token.clone().unwrap_or_default();
     let effective_model = effective_model(profile);
     let probe_prompt = select_probe_prompt(profile);
+    app_log::info(
+        "run_probe.spawn",
+        format!(
+            "binary={binary} model={} prompt_chars={}",
+            event_model(effective_model.as_deref()),
+            probe_prompt.chars().count()
+        ),
+    );
 
     if !token.trim().is_empty() && !is_supported_token_kind(&profile.token_kind) {
         return config_error_event(
@@ -60,6 +81,7 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
         match build_command(profile, binary, token.trim(), effective_model.as_deref()).spawn() {
             Ok(child) => child,
             Err(err) => {
+                app_log::error("run_probe.spawn", err.to_string());
                 let ended_at = Local::now();
                 let (prompt_summary, prompt_truncated) = prompt_summary(&probe_prompt);
                 return ProbeEvent {
@@ -91,24 +113,24 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
     }
 
     let timeout_duration = StdDuration::from_secs(profile.timeout_seconds.max(1));
-    let output_result = timeout(timeout_duration, child.wait_with_output()).await;
+    let output_result = collect_probe_output(&mut child, timeout_duration).await;
     let ended_at = Local::now();
 
     match output_result {
-        Ok(Ok(output)) => event_from_output(
+        Ok(output) => event_from_output(
             profile,
             started_at,
             ended_at,
             OutputCapture {
-                exit_code: output.status.code(),
-                timed_out: false,
+                exit_code: output.exit_code,
+                timed_out: output.timed_out,
                 effective_model: effective_model.as_deref(),
                 prompt: &probe_prompt,
                 stdout: &output.stdout,
                 stderr: &output.stderr,
             },
         ),
-        Ok(Err(err)) => {
+        Err(err) => {
             let stderr = err.to_string();
             event_from_output(
                 profile,
@@ -124,21 +146,86 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
                 },
             )
         }
-        Err(_) => {
-            let stderr = format!("probe timed out after {}s", profile.timeout_seconds);
-            event_from_output(
-                profile,
-                started_at,
-                ended_at,
-                OutputCapture {
+    }
+}
+
+struct ProbeOutput {
+    exit_code: Option<i32>,
+    timed_out: bool,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+async fn collect_probe_output(
+    child: &mut Child,
+    timeout_duration: StdDuration,
+) -> Result<ProbeOutput, std::io::Error> {
+    let Some(stdout) = child.stdout.take() else {
+        let status = child.wait().await?;
+        return Ok(ProbeOutput {
+            exit_code: status.code(),
+            timed_out: false,
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        });
+    };
+    let stderr = child.stderr.take();
+    let stderr_handle = tokio::spawn(async move {
+        let mut buffer = Vec::new();
+        if let Some(mut stderr) = stderr {
+            let _ = stderr.read_to_end(&mut buffer).await;
+        }
+        buffer
+    });
+
+    let stream_result = collect_stdout_until_done_or_timeout(child, stdout, timeout_duration).await;
+    let stderr = stderr_handle.await.unwrap_or_default();
+    stream_result.map(|mut output| {
+        output.stderr = stderr;
+        output
+    })
+}
+
+async fn collect_stdout_until_done_or_timeout(
+    child: &mut Child,
+    stdout: ChildStdout,
+    timeout_duration: StdDuration,
+) -> Result<ProbeOutput, std::io::Error> {
+    let mut lines = BufReader::new(stdout).lines();
+    let mut stdout = Vec::new();
+    let timeout_sleep = sleep(timeout_duration);
+    tokio::pin!(timeout_sleep);
+
+    loop {
+        tokio::select! {
+            line = lines.next_line() => {
+                match line? {
+                    Some(line) => {
+                        stdout.extend_from_slice(line.as_bytes());
+                        stdout.push(b'\n');
+                    }
+                    None => {
+                        let status = child.wait().await?;
+                        return Ok(ProbeOutput {
+                            exit_code: status.code(),
+                            timed_out: false,
+                            stdout,
+                            stderr: Vec::new(),
+                        });
+                    }
+                }
+            }
+            _ = &mut timeout_sleep => {
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+                let message = format!("probe timed out after {}s", timeout_duration.as_secs());
+                return Ok(ProbeOutput {
                     exit_code: None,
                     timed_out: true,
-                    effective_model: effective_model.as_deref(),
-                    prompt: &probe_prompt,
-                    stdout: b"",
-                    stderr: stderr.as_bytes(),
-                },
-            )
+                    stdout,
+                    stderr: message.into_bytes(),
+                });
+            }
         }
     }
 }
@@ -187,11 +274,16 @@ fn build_command(
     apply_claude_command_path(&mut command, binary);
     command
         .arg("-p")
+        .arg("--safe-mode")
+        .arg("--disable-slash-commands")
+        .arg("--strict-mcp-config")
+        .arg("--mcp-config")
+        .arg(r#"{"mcpServers":{}}"#)
         .arg("--no-session-persistence")
         .arg("--tools")
         .arg("")
         .arg("--output-format")
-        .arg("json")
+        .arg("stream-json")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -324,12 +416,14 @@ fn event_from_output(
         summarize_and_redact(capture.stdout, profile.stdout_summary_limit_bytes);
     let (stderr_summary, stderr_truncated) =
         summarize_and_redact(capture.stderr, profile.stderr_summary_limit_bytes);
+    let stdout_for_classification = String::from_utf8_lossy(capture.stdout);
+    let stderr_for_classification = String::from_utf8_lossy(capture.stderr);
     let (prompt_summary, prompt_truncated) = prompt_summary(capture.prompt);
     let classification = classify(
         capture.exit_code,
         capture.timed_out,
-        stdout_summary.as_deref().unwrap_or_default(),
-        stderr_summary.as_deref().unwrap_or_default(),
+        &stdout_for_classification,
+        &stderr_for_classification,
     );
 
     ProbeEvent {
@@ -563,6 +657,10 @@ printf '{"result":"OK"}'
         assert_eq!(event.model, "gateway-model[1m]");
         assert!(args.contains("--model\ngateway-model[1m]"));
         assert!(args.contains("--effort\nmax"));
+        assert!(args.contains("--safe-mode"));
+        assert!(args.contains("--disable-slash-commands"));
+        assert!(args.contains("--strict-mcp-config"));
+        assert!(args.contains("--mcp-config\n{\"mcpServers\":{}}"));
     }
 
     #[cfg(unix)]
@@ -603,6 +701,90 @@ printf '{"result":"OK"}'
         assert_eq!(event.status, ProbeStatus::Success);
         assert_eq!(stdin, "pool prompt");
         assert_eq!(event.prompt_summary.as_deref(), Some("pool prompt"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn spawned_probe_waits_for_stream_retry_process() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().expect("temp dir");
+        let script_path = dir.path().join("fake-claude-retry");
+        std::fs::write(
+            &script_path,
+            r#"#!/bin/sh
+printf '%s\n' '{"type":"system","subtype":"api_retry","error_status":429,"error":"rate_limit"}'
+sleep 1
+printf '%s\n' '{"type":"result","subtype":"error","is_error":true,"result":"API Error: Request rejected (429)"}'
+exit 1
+"#,
+        )
+        .expect("write fake claude");
+        let mut permissions = std::fs::metadata(&script_path)
+            .expect("metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&script_path, permissions).expect("chmod fake claude");
+
+        let profile = Profile {
+            token: None,
+            base_url: String::new(),
+            timeout_seconds: 20,
+            ..Profile::default()
+        };
+
+        let started = std::time::Instant::now();
+        let event =
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+
+        assert!(started.elapsed() >= StdDuration::from_secs(1));
+        assert_eq!(event.status, ProbeStatus::QueueMiss);
+        assert_eq!(event.error_kind.as_deref(), Some("429"));
+        assert!(event
+            .stdout_summary
+            .as_deref()
+            .is_some_and(|stdout| stdout.contains("api_retry")));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn spawned_probe_classifies_retry_beyond_summary_limit() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().expect("temp dir");
+        let script_path = dir.path().join("fake-claude-long-init");
+        std::fs::write(
+            &script_path,
+            r#"#!/bin/sh
+printf '{"type":"system","subtype":"init","padding":"'
+python3 - <<'PY'
+print('x' * 4096, end='')
+PY
+printf '"}\n'
+printf '%s\n' '{"type":"system","subtype":"api_retry","error_status":429,"error":"rate_limit"}'
+exit 1
+"#,
+        )
+        .expect("write fake claude");
+        let mut permissions = std::fs::metadata(&script_path)
+            .expect("metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&script_path, permissions).expect("chmod fake claude");
+
+        let profile = Profile {
+            token: None,
+            base_url: String::new(),
+            stdout_summary_limit_bytes: 256,
+            ..Profile::default()
+        };
+
+        let event =
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+
+        assert_eq!(event.status, ProbeStatus::QueueMiss);
+        assert_eq!(event.error_kind.as_deref(), Some("429"));
+        assert!(event.stdout_truncated);
     }
 
     #[tokio::test]

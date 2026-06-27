@@ -1,6 +1,16 @@
 import { Fragment, useCallback, useMemo, useState } from "react";
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { ChevronDown, Filter } from "lucide-react";
+import {
+  BadgeAlert,
+  ChevronDown,
+  CircleAlert,
+  CircleCheckBig,
+  Clock,
+  FileClock,
+  ListFilter,
+  RadioReceiver,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { PaginationBar } from "./PaginationBar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
@@ -17,7 +27,7 @@ interface ProbeHistoryTableProps {
 }
 
 const PAGE_SIZE = 10;
-const STATUS_FILTERS = new Set(["success", "queue_miss", "timeout", "config_error"]);
+const STATUS_FILTERS = new Set(["success", "queue_miss", "timeout", "config_error", "unknown"]);
 
 const helper = createColumnHelper<ProbeEvent>();
 
@@ -44,14 +54,15 @@ export function ProbeHistoryTable({ events, filter, onFilter }: ProbeHistoryTabl
     getCoreRowModel: getCoreRowModel(),
   });
 
-  const filters = [
-    ["all", "全部"],
-    ["success", "成功"],
-    ["queue_miss", "抢占"],
-    ["timeout", "超时"],
-    ["config_error", "配置"],
-    ["recent_1h", "近 1 小时"],
-    ["recent_24h", "近 24 小时"],
+  const filters: Array<{ value: string; label: string; icon: LucideIcon }> = [
+    { value: "all", label: "全部", icon: ListFilter },
+    { value: "success", label: "成功", icon: CircleCheckBig },
+    { value: "queue_miss", label: "抢占", icon: RadioReceiver },
+    { value: "timeout", label: "超时", icon: Clock },
+    { value: "config_error", label: "配置", icon: BadgeAlert },
+    { value: "unknown", label: "未判定", icon: CircleAlert },
+    { value: "recent_1h", label: "近 1 小时", icon: FileClock },
+    { value: "recent_24h", label: "近 24 小时", icon: FileClock },
   ];
 
   const handlePageChange = (nextPage: number) => {
@@ -72,22 +83,25 @@ export function ProbeHistoryTable({ events, filter, onFilter }: ProbeHistoryTabl
           <Badge variant="muted">{filteredEvents.length ? `${filteredEvents.length} 条` : "等待事件"}</Badge>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {filters.map(([value, label]) => (
-            <Button
-              key={value}
-              size="sm"
-              variant={filter === value ? "default" : "ghost"}
-              onClick={() => {
-                setPage(0);
-                setExpandedEventId(null);
-                onFilter(value);
-              }}
-              className={filter === value ? "" : "history-filter-button"}
-            >
-              {value === "all" ? <Filter /> : null}
-              {label}
-            </Button>
-          ))}
+          {filters.map((filterItem) => {
+            const Icon = filterItem.icon;
+            return (
+              <Button
+                key={filterItem.value}
+                size="sm"
+                variant={filter === filterItem.value ? "default" : "ghost"}
+                onClick={() => {
+                  setPage(0);
+                  setExpandedEventId(null);
+                  onFilter(filterItem.value);
+                }}
+                className={filter === filterItem.value ? "history-filter-active" : "history-filter-button"}
+              >
+                <Icon />
+                {filterItem.label}
+              </Button>
+            );
+          })}
         </div>
       </div>
       <div className="max-h-[520px] overflow-auto">
@@ -161,7 +175,11 @@ function createColumns(expandedEventId: string | null, toggleExpanded: (eventId:
     }),
     helper.accessor("status", {
       header: "状态",
-      cell: (info) => <StatusPill status={info.getValue()} />,
+      cell: (info) => (
+        <div className="history-status-cell">
+          <StatusPill status={info.getValue()} />
+        </div>
+      ),
     }),
     helper.accessor("error_kind", {
       header: "错误类型",

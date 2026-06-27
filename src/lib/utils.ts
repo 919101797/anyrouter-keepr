@@ -55,12 +55,14 @@ export function statusLabel(status?: string | null) {
       return "已联通";
     case "queue_miss":
       return "抢占中";
+    case "probing":
+      return "探测中";
     case "timeout":
       return "超时";
     case "config_error":
       return "配置错误";
     case "unknown":
-      return "未知";
+      return "未判定";
     default:
       return "暂无";
   }

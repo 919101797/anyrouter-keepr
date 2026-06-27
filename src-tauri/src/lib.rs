@@ -42,6 +42,11 @@ pub fn run() {
             let scheduler = Arc::new(Mutex::new(SchedulerHandle::new(db.clone())));
             app.manage(AppState { db, scheduler });
             system::tray::setup_tray(app)?;
+            system::app_log::info("app", "started");
+            system::app_log::info(
+                "app",
+                format!("log_file={}", system::app_log::path().display()),
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
