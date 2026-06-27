@@ -189,7 +189,7 @@ export function SettingsPanel({
             <Field label="Claude 可执行文件路径">
               <Input
                 value={draft.claude_binary_path}
-                placeholder="/usr/local/bin/claude，留空自动检测"
+                placeholder="留空自动检测，或填 command -v claude 输出的绝对路径"
                 onChange={(event) => update("claude_binary_path", event.target.value)}
               />
             </Field>
@@ -653,5 +653,6 @@ function claudeStatusVariant(status?: string | null): ComponentProps<typeof Badg
 }
 
 function sourceLabel(source: string) {
+  if (source === "shell") return "Shell 自动检测";
   return source === "manual" ? "手动配置" : "PATH 自动检测";
 }

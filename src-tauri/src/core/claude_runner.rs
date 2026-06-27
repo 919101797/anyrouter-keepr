@@ -9,7 +9,7 @@ use tokio::time::timeout;
 use uuid::Uuid;
 
 use crate::core::classifier::classify;
-use crate::core::claude_installation::configured_or_default_binary;
+use crate::core::claude_installation::{apply_claude_command_path, resolve_claude_binary};
 use crate::core::claude_runtime_config::detect_claude_runtime_config;
 use crate::core::redactor::summarize_and_redact;
 use crate::core::types::{ProbeEvent, ProbeStatus, Profile};
@@ -19,8 +19,24 @@ const MAX_PROMPT_CHARS: usize = 1_000;
 const MAX_PROMPT_SUMMARY_BYTES: usize = 1_024;
 
 pub async fn run_probe(profile: &Profile) -> ProbeEvent {
-    let binary = configured_or_default_binary(&profile.claude_binary_path);
-    run_probe_with_binary(profile, &binary).await
+    match resolve_claude_binary(&profile.claude_binary_path).await {
+        Ok(resolution) => run_probe_with_binary(profile, &resolution.effective_path).await,
+        Err(error) => claude_not_found_event(profile, &error.message),
+    }
+}
+
+pub fn claude_not_found_event(profile: &Profile, message: &str) -> ProbeEvent {
+    let started_at = Local::now();
+    let effective_model = effective_model(profile);
+    let probe_prompt = select_probe_prompt(profile);
+    config_error_event(
+        profile,
+        started_at,
+        effective_model.as_deref(),
+        &probe_prompt,
+        "claude_not_found",
+        message,
+    )
 }
 
 async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
@@ -168,6 +184,7 @@ fn build_command(
     effective_model: Option<&str>,
 ) -> Command {
     let mut command = Command::new(binary);
+    apply_claude_command_path(&mut command, binary);
     command
         .arg("-p")
         .arg("--no-session-persistence")
@@ -595,7 +612,7 @@ printf '{"result":"OK"}'
             ..test_profile()
         };
 
-        let event = run_probe(&profile).await;
+        let event = run_probe_with_binary(&profile, "definitely-missing-claude-test-binary").await;
 
         assert_eq!(event.status, ProbeStatus::ConfigError);
         assert_eq!(event.error_kind.as_deref(), Some("invalid_token_kind"));

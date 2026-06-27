@@ -36,6 +36,29 @@ interface AppStore {
   setAutostart: (enabled: boolean) => Promise<void>;
 }
 
+async function readRuntimeSnapshot() {
+  const [status, events, activity] = await Promise.all([
+    api.getCurrentStatus(),
+    api.listProbeEvents(2000),
+    api.getActivitySummary(24),
+  ]);
+  return { status, events, activity, anchorTime: Date.now() };
+}
+
+async function readClaudeSnapshot() {
+  const [claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs] = await Promise.all([
+    api.getClaudeInstallation(),
+    api.getClaudeRuntimeConfig(),
+    api.listClaudeDetectionLogs(20),
+  ]);
+  return { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs };
+}
+
+async function readFullSnapshot() {
+  const [runtime, claude] = await Promise.all([readRuntimeSnapshot(), readClaudeSnapshot()]);
+  return { ...runtime, ...claude };
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
   profile: null,
   status: null,
@@ -85,12 +108,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   async refreshStatus() {
     try {
-      const [status, events, activity] = await Promise.all([
-        api.getCurrentStatus(),
-        api.listProbeEvents(2000),
-        api.getActivitySummary(24),
-      ]);
-      set({ status, events, activity, anchorTime: Date.now(), error: null });
+      const snapshot = await readRuntimeSnapshot();
+      set({ ...snapshot, error: null });
     } catch (error) {
       set({ error: String(error) });
     }
@@ -130,10 +149,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ busy: true, error: null });
     try {
       await api.runProbeNow();
-      set({ busy: false });
-      await get().refreshStatus();
+      const snapshot = await readFullSnapshot();
+      set({ ...snapshot, busy: false });
     } catch (error) {
-      set({ error: String(error), busy: false });
+      const message = String(error);
+      try {
+        const snapshot = await readFullSnapshot();
+        set({ ...snapshot, error: message, busy: false });
+      } catch {
+        set({ error: message, busy: false });
+      }
     }
   },
 
@@ -141,10 +166,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ busy: true, error: null });
     try {
       await api.startScheduler();
-      set({ busy: false });
-      await get().refreshStatus();
+      const snapshot = await readFullSnapshot();
+      set({ ...snapshot, busy: false });
     } catch (error) {
-      set({ error: String(error), busy: false });
+      const message = String(error);
+      try {
+        const snapshot = await readFullSnapshot();
+        set({ ...snapshot, error: message, busy: false });
+      } catch {
+        set({ error: message, busy: false });
+      }
     }
   },
 

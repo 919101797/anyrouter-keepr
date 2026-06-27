@@ -7,7 +7,8 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 
-use crate::core::claude_runner::run_probe;
+use crate::core::claude_installation::resolve_claude_binary;
+use crate::core::claude_runner::{claude_not_found_event, run_probe};
 use crate::core::time_window::{seconds_until, TimeWindow};
 use crate::core::types::{AppStatus, ProbeEventDto, ProbeStatus};
 use crate::storage::db::Database;
@@ -50,6 +51,23 @@ impl SchedulerHandle {
                 status.current_state = "running".to_string();
             });
             return Ok(());
+        }
+
+        let profile = self
+            .db
+            .get_runtime_profile()
+            .map_err(|err| err.to_string())?;
+        if let Err(error) = resolve_claude_binary(&profile.claude_binary_path).await {
+            let event = claude_not_found_event(&profile, &error.message);
+            self.db.push_event(event).map_err(|err| err.to_string())?;
+            self.db.flush_buffer().map_err(|err| err.to_string())?;
+            self.update_status(|status| {
+                status.running = false;
+                status.in_window = false;
+                status.current_state = "config_error".to_string();
+                status.next_probe_at = None;
+            });
+            return Err(error.message);
         }
 
         self.db.set_enabled(true).map_err(|err| err.to_string())?;
@@ -262,6 +280,38 @@ mod tests {
             .ok()
             .as_deref()
             == Some("1")
+    }
+
+    #[tokio::test]
+    async fn start_reports_config_error_when_claude_path_is_missing() {
+        let dir = tempdir().expect("temp dir");
+        let db = Arc::new(Database::open(dir.path().join("scheduler.sqlite3")).expect("open db"));
+        db.migrate().expect("migrate db");
+        db.save_profile(Profile {
+            claude_binary_path: dir
+                .path()
+                .join("missing-claude")
+                .to_string_lossy()
+                .into_owned(),
+            token: None,
+            start_time: "00:00".to_string(),
+            end_time: "24:00".to_string(),
+            ..Profile::default()
+        })
+        .expect("save profile");
+
+        let mut scheduler = SchedulerHandle::new(db.clone());
+        let result = scheduler.start().await;
+
+        assert!(result.is_err());
+        let status = scheduler.runtime_status();
+        assert!(!status.running);
+        assert_eq!(status.current_state, "config_error");
+
+        let events = db.list_events(10, None).expect("list events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].status, ProbeStatus::ConfigError);
+        assert_eq!(events[0].error_kind.as_deref(), Some("claude_not_found"));
     }
 
     #[tokio::test]

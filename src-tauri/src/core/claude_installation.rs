@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::env;
 use std::ffi::OsString;
+use std::fs;
+use std::path;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration as StdDuration;
@@ -12,72 +14,82 @@ use tokio::time::timeout;
 use crate::core::types::ClaudeInstallation;
 
 const VERSION_TIMEOUT_SECONDS: u64 = 5;
+const SHELL_LOOKUP_TIMEOUT_SECONDS: u64 = 4;
 const SUMMARY_LIMIT: usize = 300;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaudeBinaryResolution {
+    pub configured_path: String,
+    pub detected_path: Option<String>,
+    pub effective_path: String,
+    pub source: String,
+}
 
 pub async fn detect_claude_installation(configured_path: &str) -> ClaudeInstallation {
     let checked_at = Local::now().to_rfc3339();
     let configured_path = configured_path.trim().to_string();
 
-    if !configured_path.is_empty() {
-        return detect_manual_path(checked_at, configured_path).await;
-    }
-
-    let detected_path = find_binary_in_path("claude").map(path_to_string);
-    let Some(effective_path) = detected_path.clone() else {
-        return ClaudeInstallation {
+    match resolve_claude_binary(&configured_path).await {
+        Ok(resolution) => {
+            installation_from_version_probe(
+                checked_at,
+                resolution.configured_path,
+                resolution.detected_path,
+                resolution.effective_path,
+                &resolution.source,
+            )
+            .await
+        }
+        Err(error) => ClaudeInstallation {
             checked_at,
+            effective_path: if configured_path.is_empty() {
+                None
+            } else {
+                Some(configured_path.clone())
+            },
             configured_path,
             detected_path: None,
-            effective_path: None,
             version: None,
-            source: "path".to_string(),
-            status: "not_found".to_string(),
-            error: Some("PATH 中没有找到 claude".to_string()),
-        };
-    };
-
-    installation_from_version_probe(
-        checked_at,
-        configured_path,
-        detected_path,
-        effective_path,
-        "path",
-    )
-    .await
-}
-
-pub fn configured_or_default_binary(configured_path: &str) -> String {
-    let configured_path = configured_path.trim();
-    if configured_path.is_empty() {
-        "claude".to_string()
-    } else {
-        configured_path.to_string()
+            source: if error.is_manual { "manual" } else { "path" }.to_string(),
+            status: if error.is_manual {
+                "invalid"
+            } else {
+                "not_found"
+            }
+            .to_string(),
+            error: Some(error.message),
+        },
     }
 }
 
-async fn detect_manual_path(checked_at: String, configured_path: String) -> ClaudeInstallation {
-    let path = resolve_configured_path(&configured_path);
-    let Some(effective_path) = path.filter(|path| is_executable_file(path)) else {
-        return ClaudeInstallation {
-            checked_at,
-            configured_path: configured_path.clone(),
-            detected_path: None,
-            effective_path: Some(configured_path),
-            version: None,
-            source: "manual".to_string(),
-            status: "invalid".to_string(),
-            error: Some("手动配置的 claude 路径不存在或不可执行".to_string()),
+pub async fn resolve_claude_binary(
+    configured_path: &str,
+) -> Result<ClaudeBinaryResolution, ClaudeBinaryResolutionError> {
+    let configured_path = configured_path.trim().to_string();
+
+    if configured_path.is_empty() {
+        let Some((path, source)) = find_binary("claude").await else {
+            return Err(ClaudeBinaryResolutionError::auto_not_found());
         };
+        let effective_path = path_to_string(path);
+        return Ok(ClaudeBinaryResolution {
+            configured_path,
+            detected_path: Some(effective_path.clone()),
+            effective_path,
+            source,
+        });
+    }
+
+    let Some((path, source)) = resolve_configured_path(&configured_path).await else {
+        return Err(ClaudeBinaryResolutionError::manual_invalid(configured_path));
     };
 
-    installation_from_version_probe(
-        checked_at,
+    Ok(ClaudeBinaryResolution {
         configured_path,
-        None,
-        path_to_string(effective_path),
-        "manual",
-    )
-    .await
+        detected_path: None,
+        effective_path: path_to_string(path),
+        source,
+    })
 }
 
 async fn installation_from_version_probe(
@@ -112,7 +124,9 @@ async fn installation_from_version_probe(
 }
 
 async fn read_claude_version(binary: &str) -> Result<String, String> {
-    let child = Command::new(binary)
+    let mut command = Command::new(binary);
+    apply_claude_command_path(&mut command, binary);
+    let child = command
         .arg("--version")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -149,20 +163,73 @@ async fn read_claude_version(binary: &str) -> Result<String, String> {
     }
 }
 
-fn resolve_configured_path(value: &str) -> Option<PathBuf> {
+pub fn apply_claude_command_path(command: &mut Command, binary: &str) {
+    command.env("PATH", command_path(binary));
+}
+
+fn command_path(binary: &str) -> OsString {
+    let mut seen = HashSet::<OsString>::new();
+    let mut dirs = Vec::new();
+
+    if let Some(parent) = Path::new(binary)
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        push_unique_dir(&mut dirs, &mut seen, parent.to_path_buf());
+    }
+
+    for dir in candidate_dirs() {
+        push_unique_dir(&mut dirs, &mut seen, dir);
+    }
+
+    env::join_paths(&dirs).unwrap_or_else(|_| env::var_os("PATH").unwrap_or_default())
+}
+
+async fn resolve_configured_path(value: &str) -> Option<(PathBuf, String)> {
     let path = PathBuf::from(value);
-    if path.is_absolute() || value.contains(std::path::MAIN_SEPARATOR) {
-        Some(path)
+    if path.is_absolute() || value.contains(path::MAIN_SEPARATOR) {
+        if is_executable_file(&path) {
+            Some((path, "manual".to_string()))
+        } else {
+            None
+        }
+    } else if let Some(path) = find_binary_in_path(value) {
+        Some((path, "manual".to_string()))
     } else {
-        find_binary_in_path(value).or(Some(path))
+        find_binary_in_user_shell(value)
+            .await
+            .map(|path| (path, "manual".to_string()))
     }
 }
 
+async fn find_binary(binary_name: &str) -> Option<(PathBuf, String)> {
+    if let Some(path) = find_binary_in_path(binary_name) {
+        return Some((path, "path".to_string()));
+    }
+
+    find_binary_in_user_shell(binary_name)
+        .await
+        .map(|path| (path, "shell".to_string()))
+}
+
 fn find_binary_in_path(binary_name: &str) -> Option<PathBuf> {
-    candidate_dirs()
-        .into_iter()
+    find_binary_in_dirs(binary_name, candidate_dirs())
+}
+
+fn find_binary_in_dirs(binary_name: &str, dirs: Vec<PathBuf>) -> Option<PathBuf> {
+    dirs.into_iter()
         .flat_map(|dir| candidate_files(&dir, binary_name))
         .find(|path| is_executable_file(path))
+}
+
+#[cfg(test)]
+fn resolve_configured_path_in_dirs(value: &str, dirs: Vec<PathBuf>) -> Option<PathBuf> {
+    let path = PathBuf::from(value);
+    if path.is_absolute() || value.contains(path::MAIN_SEPARATOR) {
+        is_executable_file(&path).then_some(path)
+    } else {
+        find_binary_in_dirs(value, dirs)
+    }
 }
 
 fn candidate_dirs() -> Vec<PathBuf> {
@@ -186,12 +253,58 @@ fn candidate_dirs() -> Vec<PathBuf> {
     }
 
     if let Some(home) = dirs::home_dir() {
-        for relative in [".local/bin", ".npm-global/bin", ".yarn/bin", ".cargo/bin"] {
+        for relative in [
+            ".local/bin",
+            ".npm-global/bin",
+            ".npm-packages/bin",
+            ".yarn/bin",
+            ".cargo/bin",
+            ".volta/bin",
+            ".asdf/shims",
+            ".mise/shims",
+            ".nodenv/shims",
+            ".bun/bin",
+            ".local/share/pnpm",
+            "Library/pnpm",
+            ".local/share/mise/shims",
+        ] {
             push_unique_dir(&mut dirs, &mut seen, home.join(relative));
         }
+        push_child_bin_dirs(&mut dirs, &mut seen, &home.join(".nvm/versions/node"));
+        push_fnm_bin_dirs(&mut dirs, &mut seen, &home.join(".fnm/node-versions"));
     }
 
     dirs
+}
+
+fn push_child_bin_dirs(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>, root: &Path) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    let mut children = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("bin"))
+        .collect::<Vec<_>>();
+    children.sort();
+    children.reverse();
+    for dir in children {
+        push_unique_dir(dirs, seen, dir);
+    }
+}
+
+fn push_fnm_bin_dirs(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>, root: &Path) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    let mut children = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("installation/bin"))
+        .collect::<Vec<_>>();
+    children.sort();
+    children.reverse();
+    for dir in children {
+        push_unique_dir(dirs, seen, dir);
+    }
 }
 
 fn push_unique_dir(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>, dir: PathBuf) {
@@ -218,6 +331,73 @@ fn candidate_files(dir: &Path, binary_name: &str) -> Vec<PathBuf> {
     {
         vec![dir.join(binary_name)]
     }
+}
+
+#[cfg(unix)]
+async fn find_binary_in_user_shell(binary_name: &str) -> Option<PathBuf> {
+    if !is_plain_binary_name(binary_name) {
+        return None;
+    }
+
+    let shell = env::var_os("SHELL")
+        .map(PathBuf::from)
+        .filter(|path| is_executable_file(path))
+        .unwrap_or_else(default_shell);
+
+    let child = Command::new(shell)
+        .arg("-lic")
+        .arg(format!("command -v {binary_name}"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .ok()?;
+
+    let output = timeout(
+        StdDuration::from_secs(SHELL_LOOKUP_TIMEOUT_SECONDS),
+        child.wait_with_output(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout.lines().find_map(|line| {
+        let trimmed = line.trim();
+        let path = PathBuf::from(trimmed);
+        if path.is_absolute() && is_executable_file(&path) {
+            Some(path)
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(not(unix))]
+async fn find_binary_in_user_shell(_binary_name: &str) -> Option<PathBuf> {
+    None
+}
+
+fn is_plain_binary_name(binary_name: &str) -> bool {
+    !binary_name.is_empty()
+        && binary_name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+}
+
+#[cfg(all(unix, target_os = "macos"))]
+fn default_shell() -> PathBuf {
+    PathBuf::from("/bin/zsh")
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn default_shell() -> PathBuf {
+    PathBuf::from("/bin/sh")
 }
 
 fn is_executable_file(path: &Path) -> bool {
@@ -251,6 +431,30 @@ fn truncate_summary(value: &str) -> String {
     }
     let truncated = compact.chars().take(SUMMARY_LIMIT).collect::<String>();
     format!("{truncated}...")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaudeBinaryResolutionError {
+    pub message: String,
+    pub is_manual: bool,
+}
+
+impl ClaudeBinaryResolutionError {
+    fn auto_not_found() -> Self {
+        Self {
+            message: "未找到 Claude Code CLI。macOS 打包 App 可能拿不到终端 PATH，请在 Claude 可执行文件路径里填入 `command -v claude` 输出的绝对路径，例如 /opt/homebrew/bin/claude、/usr/local/bin/claude 或你的 nvm/volta/asdf 安装路径。".to_string(),
+            is_manual: false,
+        }
+    }
+
+    fn manual_invalid(configured_path: String) -> Self {
+        Self {
+            message: format!(
+                "手动配置的 Claude Code CLI 路径不存在或不可执行：{configured_path}。请填入 `command -v claude` 输出的绝对路径。"
+            ),
+            is_manual: true,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -318,11 +522,40 @@ mod tests {
     }
 
     #[test]
-    fn empty_configured_path_uses_default_binary_name() {
-        assert_eq!(configured_or_default_binary(" "), "claude");
-        assert_eq!(
-            configured_or_default_binary("/usr/local/bin/claude"),
-            "/usr/local/bin/claude"
-        );
+    fn finds_executable_binary_from_candidate_dirs() {
+        let dir = tempdir().unwrap();
+        let script = dir.path().join("claude");
+        fs::write(&script, "#!/bin/sh\necho ok\n").unwrap();
+        #[cfg(unix)]
+        make_executable(&script);
+
+        let found = find_binary_in_dirs("claude", vec![dir.path().to_path_buf()]);
+
+        assert_eq!(found.as_deref(), Some(script.as_path()));
+    }
+
+    #[test]
+    fn resolves_manual_binary_name_through_candidate_dirs() {
+        let dir = tempdir().unwrap();
+        let script = dir.path().join("claude-test");
+        fs::write(&script, "#!/bin/sh\necho ok\n").unwrap();
+        #[cfg(unix)]
+        make_executable(&script);
+
+        let resolved =
+            resolve_configured_path_in_dirs("claude-test", vec![dir.path().to_path_buf()]);
+
+        assert_eq!(resolved.as_deref(), Some(script.as_path()));
+    }
+
+    #[test]
+    fn command_path_puts_binary_parent_first() {
+        let dir = tempdir().unwrap();
+        let binary = dir.path().join("claude");
+
+        let path_value = command_path(binary.to_str().unwrap());
+        let mut paths = env::split_paths(&path_value);
+
+        assert_eq!(paths.next().as_deref(), Some(dir.path()));
     }
 }
