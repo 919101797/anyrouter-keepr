@@ -242,14 +242,17 @@ fn candidate_dirs() -> Vec<PathBuf> {
         }
     }
 
-    for dir in [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-        "/bin",
-        "/opt/local/bin",
-    ] {
-        push_unique_dir(&mut dirs, &mut seen, PathBuf::from(dir));
+    #[cfg(not(windows))]
+    {
+        for dir in [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/opt/local/bin",
+        ] {
+            push_unique_dir(&mut dirs, &mut seen, PathBuf::from(dir));
+        }
     }
 
     if let Some(home) = dirs::home_dir() {
@@ -274,8 +277,54 @@ fn candidate_dirs() -> Vec<PathBuf> {
         push_fnm_bin_dirs(&mut dirs, &mut seen, &home.join(".fnm/node-versions"));
     }
 
+    push_windows_candidate_dirs(&mut dirs, &mut seen);
+
     dirs
 }
+
+#[cfg(windows)]
+fn push_windows_candidate_dirs(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>) {
+    if let Some(appdata) = env::var_os("APPDATA").map(PathBuf::from) {
+        push_unique_dir(dirs, seen, appdata.join("npm"));
+    }
+
+    if let Some(local_appdata) = env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        for relative in [
+            "pnpm",
+            "Volta/bin",
+            "Yarn/bin",
+            "Programs/nodejs",
+            "Microsoft/WinGet/Packages",
+        ] {
+            push_unique_dir(dirs, seen, local_appdata.join(relative));
+        }
+    }
+
+    for var in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(root) = env::var_os(var).map(PathBuf::from) {
+            push_unique_dir(dirs, seen, root.join("nodejs"));
+        }
+    }
+
+    if let Some(userprofile) = env::var_os("USERPROFILE").map(PathBuf::from) {
+        for relative in ["scoop/shims", ".volta/bin", ".bun/bin"] {
+            push_unique_dir(dirs, seen, userprofile.join(relative));
+        }
+    }
+
+    if let Some(programdata) = env::var_os("ProgramData").map(PathBuf::from) {
+        push_unique_dir(dirs, seen, programdata.join("scoop/shims"));
+    }
+
+    for var in ["NVM_SYMLINK", "NVM_HOME"] {
+        if let Some(path) = env::var_os(var).map(PathBuf::from) {
+            push_unique_dir(dirs, seen, path);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn push_windows_candidate_dirs(_dirs: &mut Vec<PathBuf>, _seen: &mut HashSet<OsString>) {}
 
 fn push_child_bin_dirs(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>, root: &Path) {
     let Ok(entries) = fs::read_dir(root) else {
