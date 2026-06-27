@@ -24,14 +24,40 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    name: Prepare draft release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+      RELEASE_NAME: AnyRouter Keeper ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+      RELEASE_BODY: Signed desktop installers and updater metadata are attached below. GitHub also shows automatic Source code archives; those are filtered and are not installation packages.
+    steps:
+      - name: Create draft release
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --title "$RELEASE_NAME" \
+            --notes "$RELEASE_BODY"
+
   release:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.platform }}
+    needs: prepare-release
     timeout-minutes: 90
     env:
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - label: "macOS Apple Silicon"

@@ -31,7 +31,7 @@ uses these environment variables in CI to deploy the generated updater feed.
 
 ## Release Flow
 
-1. Push a git tag such as `v0.1.9`.
+1. Push a git tag such as `v0.1.10`.
 2. The `Release` workflow builds signed Tauri bundles for macOS, Windows, and
    Linux.
 3. The publish job downloads the GitHub Release assets into CI, rewrites
