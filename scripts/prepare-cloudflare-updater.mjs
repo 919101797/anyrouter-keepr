@@ -1,8 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const sourceDir = path.resolve(process.env.SOURCE_DIR || process.argv[2] || "");
 const outputDir = path.resolve(process.env.OUTPUT_DIR || process.argv[3] || "cloudflare-pages");
+const maxPagesFileSizeBytes = Number.parseInt(
+  process.env.MAX_PAGES_FILE_SIZE_BYTES || `${25 * 1024 * 1024}`,
+  10,
+);
 const releaseTag = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME || "";
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL || "https://anyrouter-claude-keeper.pages.dev").replace(
   /\/+$/,
@@ -26,6 +30,10 @@ const latest = JSON.parse(readFileSync(latestPath, "utf8"));
 const assetFiles = readdirSync(sourceDir, { withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name !== "latest.json")
   .map((entry) => entry.name);
+const deployableAssetFiles = assetFiles.filter(
+  (fileName) => statSync(path.join(sourceDir, fileName)).size <= maxPagesFileSizeBytes,
+);
+const oversizedAssetFiles = assetFiles.filter((fileName) => !deployableAssetFiles.includes(fileName));
 
 if (assetFiles.length === 0) {
   throw new Error(`No release assets found in ${sourceDir}`);
@@ -35,11 +43,12 @@ const releasePath = encodeURIComponent(releaseTag);
 const releaseOutputDir = path.join(outputDir, "releases", releasePath);
 mkdirSync(releaseOutputDir, { recursive: true });
 
-for (const fileName of assetFiles) {
+for (const fileName of deployableAssetFiles) {
   copyFileSync(path.join(sourceDir, fileName), path.join(releaseOutputDir, fileName));
 }
 
 const assetFileSet = new Set(assetFiles);
+const oversizedAssetFileSet = new Set(oversizedAssetFiles);
 const platforms = latest.platforms || {};
 const missingAssets = [];
 
@@ -55,6 +64,10 @@ for (const [platform, entry] of Object.entries(platforms)) {
   const fileName = fileNameFromUrl(entry.url);
   if (!assetFileSet.has(fileName)) {
     missingAssets.push(`${platform}: ${fileName}`);
+    continue;
+  }
+
+  if (oversizedAssetFileSet.has(fileName)) {
     continue;
   }
 
@@ -100,6 +113,13 @@ writeFileSync(
 );
 
 console.log(`Prepared Cloudflare updater feed for ${releaseTag} in ${outputDir}`);
+if (oversizedAssetFiles.length > 0) {
+  console.log(
+    `Left oversized assets on their original release URLs because Cloudflare Pages files must be <= ${maxPagesFileSizeBytes} bytes: ${oversizedAssetFiles.join(
+      ", ",
+    )}`,
+  );
+}
 
 function fileNameFromUrl(value) {
   try {
