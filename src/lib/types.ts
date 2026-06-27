@@ -42,6 +42,7 @@ export interface ProbeEvent {
   exit_code?: number | null;
   base_url: string;
   model: string;
+  key_summary?: string | null;
   prompt_summary?: string | null;
   prompt_truncated: boolean;
   stdout_summary?: string | null;

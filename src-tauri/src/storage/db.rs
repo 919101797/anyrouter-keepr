@@ -100,6 +100,7 @@ impl Database {
               exit_code INTEGER,
               base_url TEXT NOT NULL,
               model TEXT NOT NULL,
+              key_summary TEXT,
               prompt_summary TEXT,
               prompt_truncated INTEGER NOT NULL DEFAULT 0,
               stdout_summary TEXT,
@@ -161,6 +162,7 @@ impl Database {
             )?;
         }
         add_column_if_missing(&conn, "probe_events", "prompt_summary", "TEXT")?;
+        add_column_if_missing(&conn, "probe_events", "key_summary", "TEXT")?;
         add_column_if_missing(
             &conn,
             "probe_events",
@@ -424,10 +426,10 @@ impl Database {
                 r#"
                 INSERT INTO probe_events (
                     id, profile_id, started_at, ended_at, duration_ms, status,
-                    error_kind, exit_code, base_url, model, prompt_summary,
+                    error_kind, exit_code, base_url, model, key_summary, prompt_summary,
                     prompt_truncated, stdout_summary, stderr_summary,
                     stdout_truncated, stderr_truncated, created_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
                 "#,
                 params![
                     event.id,
@@ -440,6 +442,7 @@ impl Database {
                     event.exit_code,
                     event.base_url,
                     event.model,
+                    event.key_summary,
                     event.prompt_summary,
                     if event.prompt_truncated { 1 } else { 0 },
                     event.stdout_summary,
@@ -473,7 +476,7 @@ impl Database {
             let mut stmt = conn.prepare(
                 r#"
                 SELECT id, profile_id, started_at, ended_at, duration_ms, status, error_kind,
-                       exit_code, base_url, model, prompt_summary, prompt_truncated,
+                       exit_code, base_url, model, key_summary, prompt_summary, prompt_truncated,
                        stdout_summary, stderr_summary, stdout_truncated, stderr_truncated
                 FROM probe_events
                 WHERE profile_id = 'default' AND status = ?1
@@ -489,7 +492,7 @@ impl Database {
             let mut stmt = conn.prepare(
                 r#"
                 SELECT id, profile_id, started_at, ended_at, duration_ms, status, error_kind,
-                       exit_code, base_url, model, prompt_summary, prompt_truncated,
+                       exit_code, base_url, model, key_summary, prompt_summary, prompt_truncated,
                        stdout_summary, stderr_summary, stdout_truncated, stderr_truncated
                 FROM probe_events
                 WHERE profile_id = 'default'
@@ -586,7 +589,7 @@ impl Database {
         let mut stmt = conn.prepare(
             r#"
             SELECT id, profile_id, started_at, ended_at, duration_ms, status, error_kind,
-                   exit_code, base_url, model, prompt_summary, prompt_truncated,
+                   exit_code, base_url, model, key_summary, prompt_summary, prompt_truncated,
                    stdout_summary, stderr_summary, stdout_truncated, stderr_truncated
             FROM probe_events
             WHERE profile_id = 'default' AND started_at >= ?1
@@ -797,12 +800,13 @@ fn map_event_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProbeEventDto> {
         exit_code: row.get(7)?,
         base_url: row.get(8)?,
         model: row.get(9)?,
-        prompt_summary: row.get(10)?,
-        prompt_truncated: row.get::<_, i64>(11)? != 0,
-        stdout_summary: row.get(12)?,
-        stderr_summary: row.get(13)?,
-        stdout_truncated: row.get::<_, i64>(14)? != 0,
-        stderr_truncated: row.get::<_, i64>(15)? != 0,
+        key_summary: row.get(10)?,
+        prompt_summary: row.get(11)?,
+        prompt_truncated: row.get::<_, i64>(12)? != 0,
+        stdout_summary: row.get(13)?,
+        stderr_summary: row.get(14)?,
+        stdout_truncated: row.get::<_, i64>(15)? != 0,
+        stderr_truncated: row.get::<_, i64>(16)? != 0,
     })
 }
 
@@ -834,6 +838,7 @@ mod tests {
             exit_code: Some(1),
             base_url: "https://anyrouter.top".to_string(),
             model: "sonnet".to_string(),
+            key_summary: Some("profile_override · ANTHROPIC_AUTH_TOKEN · sk-...st-key".to_string()),
             prompt_summary: Some("用一句话讲个笑话".to_string()),
             prompt_truncated: false,
             stdout_summary: None,
@@ -854,6 +859,10 @@ mod tests {
         assert_eq!(
             events[0].prompt_summary.as_deref(),
             Some("用一句话讲个笑话")
+        );
+        assert_eq!(
+            events[0].key_summary.as_deref(),
+            Some("profile_override · ANTHROPIC_AUTH_TOKEN · sk-...st-key")
         );
     }
 

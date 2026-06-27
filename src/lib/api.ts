@@ -26,6 +26,7 @@ const mockEvents: ProbeEvent[] = [
     exit_code: 1,
     base_url: "https://anyrouter.top",
     model: "sonnet[1m]",
+    key_summary: "cc_switch:any-github · ANTHROPIC_AUTH_TOKEN · sk-ant-...abc123",
     prompt_summary: "今天天气怎样？一句话答",
     prompt_truncated: false,
     stdout_summary: null,
@@ -44,6 +45,7 @@ const mockEvents: ProbeEvent[] = [
     exit_code: 0,
     base_url: "https://anyrouter.top",
     model: "sonnet[1m]",
+    key_summary: "cc_switch:any-github · ANTHROPIC_AUTH_TOKEN · sk-ant-...abc123",
     prompt_summary: "用一句话讲个笑话",
     prompt_truncated: false,
     stdout_summary: '{"result":"OK"}',
@@ -127,6 +129,11 @@ export const api = {
   async getClaudeRuntimeConfig(): Promise<ClaudeRuntimeConfig> {
     if (!inTauri) return mockClaudeRuntimeConfig;
     return invoke("get_claude_runtime_config");
+  },
+
+  async getClaudeKeyValue(keySummary?: string | null): Promise<string | null> {
+    if (!inTauri) return "sk-ant-mock-copied-key";
+    return invoke("get_claude_key_value", { keySummary: keySummary || null });
   },
 
   async refreshClaudeInstallation(): Promise<ClaudeInstallation> {

@@ -1,7 +1,7 @@
 {
   "name": "anyrouter-claude-keeper",
   "private": true,
-  "version": "0.1.11",
+  "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
@@ -17,9 +17,9 @@
     "cloudflare:whoami": "wrangler whoami",
     "cloudflare:create": "wrangler pages project create anyrouter-claude-keeper --production-branch main --compatibility-date 2026-06-27",
     "cloudflare:deploy": "wrangler pages deploy cloudflare-pages --project-name anyrouter-claude-keeper --branch main",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build --no-bundle"
+    "tauri": "node scripts/run-tauri.mjs",
+    "tauri:dev": "node scripts/run-tauri.mjs dev",
+    "tauri:build": "node scripts/run-tauri.mjs build --no-bundle"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

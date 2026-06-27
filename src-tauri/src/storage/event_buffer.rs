@@ -95,6 +95,7 @@ mod tests {
             exit_code: Some(1),
             base_url: "https://anyrouter.top".to_string(),
             model: "sonnet".to_string(),
+            key_summary: None,
             prompt_summary: Some("用一句话讲个笑话".to_string()),
             prompt_truncated: false,
             stdout_summary: None,

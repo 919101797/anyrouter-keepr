@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::core::claude_installation::detect_claude_installation;
-use crate::core::claude_runtime_config::detect_claude_runtime_config;
+use crate::core::claude_runtime_config::{detect_claude_runtime_config, resolve_claude_key_value};
 use crate::core::types::{ClaudeDetectionLog, ClaudeInstallation, ClaudeRuntimeConfig};
 use crate::AppState;
 
@@ -40,4 +40,20 @@ pub async fn list_claude_detection_logs(
 #[tauri::command]
 pub async fn get_claude_runtime_config() -> Result<ClaudeRuntimeConfig, String> {
     Ok(detect_claude_runtime_config())
+}
+
+#[tauri::command]
+pub async fn get_claude_key_value(
+    key_summary: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let profile = state
+        .db
+        .get_runtime_profile()
+        .map_err(|err| err.to_string())?;
+    Ok(resolve_claude_key_value(
+        key_summary.as_deref(),
+        &profile.token_kind,
+        profile.token.as_deref().unwrap_or_default(),
+    ))
 }

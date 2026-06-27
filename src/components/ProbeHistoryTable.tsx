@@ -6,6 +6,8 @@ import {
   CircleAlert,
   CircleCheckBig,
   Clock,
+  Check,
+  Copy,
   FileClock,
   ListFilter,
   RadioReceiver,
@@ -17,6 +19,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { StatusPill } from "./StatusPill";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { api } from "../lib/api";
 import type { ProbeEvent } from "../lib/types";
 import { cn, formatClock, formatDuration, statusLabel } from "../lib/utils";
 
@@ -105,7 +108,7 @@ export function ProbeHistoryTable({ events, filter, onFilter }: ProbeHistoryTabl
         </div>
       </div>
       <div className="max-h-[520px] overflow-auto">
-        <Table className="min-w-[1280px]">
+        <Table className="min-w-[1420px]">
           <TableHeader className="history-table-header sticky top-0 z-10 bg-white">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="history-table-head-row">
@@ -207,6 +210,10 @@ function createColumns(expandedEventId: string | null, toggleExpanded: (eventId:
         </span>
       ),
     }),
+    helper.accessor("key_summary", {
+      header: "KEY",
+      cell: (info) => <KeyCell value={info.getValue()} />,
+    }),
     helper.accessor("base_url", {
       header: "Endpoint",
       cell: (info) => (
@@ -273,6 +280,7 @@ function EventDetail({ event }: { event: ProbeEvent }) {
   const errorKind = event.error_kind?.trim() || "无";
   const model = event.model?.trim() || "默认模型";
   const endpoint = event.base_url?.trim() || "Claude Code 当前配置";
+  const keySummary = event.key_summary?.trim() || "未解析（Claude Code 当前配置）";
 
   return (
     <div className="rounded-[7px] border border-[#16211c] bg-[#101612] p-3 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -284,8 +292,9 @@ function EventDetail({ event }: { event: ProbeEvent }) {
         <DetailFact label="Exit" value={exitCode} />
         <DetailFact label="错误" value={errorKind} />
       </div>
-      <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="mt-2 grid gap-2 lg:grid-cols-3">
         <DetailFact label="模型" value={model} />
+        <KeyDetailFact value={keySummary} keySummary={event.key_summary} />
         <DetailFact label="Endpoint" value={endpoint} />
       </div>
       <div className="mt-2 grid gap-2 xl:grid-cols-3">
@@ -295,6 +304,101 @@ function EventDetail({ event }: { event: ProbeEvent }) {
       </div>
     </div>
   );
+}
+
+function KeyCell({ value }: { value?: string | null }) {
+  const keySummary = value?.trim();
+  return (
+    <div className="flex max-w-[260px] items-center gap-1.5">
+      <HistoryTextCell
+        value={keySummary || "Claude Code 当前配置"}
+        truncated={false}
+        className="mono min-w-0 flex-1"
+      />
+      <CopyKeyButton keySummary={keySummary} />
+    </div>
+  );
+}
+
+function KeyDetailFact({ value, keySummary }: { value: string; keySummary?: string | null }) {
+  return (
+    <div className="min-w-0 rounded-[6px] border border-white/10 bg-white/[0.035] px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#7f948a]">KEY</div>
+        <CopyKeyButton keySummary={keySummary?.trim()} dark />
+      </div>
+      <div className="mt-1 truncate text-xs font-semibold text-[#dce8e2]">{value}</div>
+    </div>
+  );
+}
+
+function CopyKeyButton({ keySummary, dark = false }: { keySummary?: string | null; dark?: boolean }) {
+  const [state, setState] = useState<"idle" | "copied" | "missing" | "failed">("idle");
+  const Icon = state === "copied" ? Check : Copy;
+  const label =
+    state === "copied"
+      ? "已复制完整 Key"
+      : state === "missing"
+        ? "当前配置中未找到这把 Key"
+        : state === "failed"
+          ? "复制失败"
+          : "复制完整 Key";
+
+  const handleCopy = async () => {
+    try {
+      const value = await api.getClaudeKeyValue(keySummary || null);
+      if (!value) {
+        setState("missing");
+        window.setTimeout(() => setState("idle"), 1800);
+        return;
+      }
+      await writeClipboardText(value);
+      setState("copied");
+      window.setTimeout(() => setState("idle"), 1800);
+    } catch {
+      setState("failed");
+      window.setTimeout(() => setState("idle"), 1800);
+    }
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          variant={dark ? "ghost" : "outline"}
+          className={cn(
+            "h-7 w-7 shrink-0 px-0",
+            dark && "text-[#b6c8bf] hover:bg-white/10 hover:text-white",
+            state === "copied" && "text-[#1c7c48]",
+          )}
+          aria-label={label}
+          onClick={handleCopy}
+        >
+          <Icon />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+async function writeClipboardText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
 }
 
 function DetailFact({ label, value }: { label: string; value: string }) {
