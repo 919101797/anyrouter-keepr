@@ -9,6 +9,8 @@ src-tauri/.tauri/
 *.tsbuildinfo
 .cache/
 .turbo/
+.wrangler/
+cloudflare-pages/
 
 # Local runtime data
 *.log

@@ -7,7 +7,9 @@ macOS, Windows, and Linux.
 
 - `CI` runs lint, formatting, frontend tests, Rust tests, and a Linux smoke build
   on pushes and pull requests to `main`.
-- `Release` builds desktop installers and uploads them to a GitHub Release.
+- `Release` builds desktop installers into a draft GitHub Release, validates
+  the generated updater metadata, mirrors the updater feed to Cloudflare Pages,
+  then publishes the release as `Latest` after every platform has finished.
 
 The release workflow runs automatically when any git tag is pushed. It can also
 be started from the GitHub Actions tab with `workflow_dispatch`.
@@ -48,11 +50,32 @@ character such as `%` at the end of the key will make updater signing fail with
 `failed to decode base64 secret key`.
 
 The release workflow uploads Tauri's `latest.json` updater metadata to the
-GitHub Release. The app checks:
+GitHub Release, then mirrors the metadata and update bundles to Cloudflare
+Pages. The app checks:
 
 ```text
-https://github.com/919101797/anyrouter-keepr/releases/latest/download/latest.json
+https://anyrouter-claude-keeper.pages.dev/latest.json
 ```
+
+That URL must be reachable without authentication. Tauri updater fetches the
+release metadata and installer assets as an anonymous desktop client. If this
+check fails, the installed app will show an update metadata error:
+
+```bash
+curl -LfsS https://anyrouter-claude-keeper.pages.dev/latest.json | jq .
+```
+
+The workflow keeps GitHub Releases as the build artifact staging area, but
+installed apps use Cloudflare Pages for update checks and downloads. Already
+installed builds keep their compiled updater endpoint, so builds shipped before
+this endpoint change still check the older GitHub URL.
+
+Cloudflare deployment requires these repository secrets:
+
+| Secret                  | Description                                       |
+| ----------------------- | ------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns the Pages project.   |
+| `CLOUDFLARE_API_TOKEN`  | API token with Pages edit access for the account. |
 
 GitHub automatically displays `Source code (zip)` and
 `Source code (tar.gz)` links on every release. They cannot be removed from the

@@ -1,0 +1,6 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "anyrouter-claude-keeper",
+  "compatibility_date": "2026-06-27",
+  "pages_build_output_dir": "./cloudflare-pages",
+}

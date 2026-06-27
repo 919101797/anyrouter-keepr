@@ -29,6 +29,12 @@ export interface ProgressAccumulator {
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const UPDATE_CHECK_TIMEOUT_MS = 30_000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+const RELEASE_METADATA_ERROR_PATTERNS = [
+  /could not fetch a valid release json/i,
+  /release json/i,
+  /latest\.json/i,
+  /404|not found/i,
+];
 
 export async function checkForAppUpdate(): Promise<PendingAppUpdate | null> {
   const mockUpdate = createBrowserMockUpdate();
@@ -123,6 +129,22 @@ export function formatBytes(value?: number) {
   if (!value || value <= 0) return "未知大小";
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function normalizeUpdaterError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const compactMessage = message.trim();
+
+  if (isReleaseMetadataError(compactMessage)) {
+    return "无法读取 Cloudflare Pages 更新元数据。请确认 latest.json 和安装包资产已经随 release tag 发布，并且可以匿名下载。";
+  }
+
+  return compactMessage || "更新失败，请稍后重试。";
+}
+
+function isReleaseMetadataError(message: string) {
+  const matched = RELEASE_METADATA_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+  return matched && /cloudflare|pages|release|json|latest|404|not found/i.test(message);
 }
 
 function createBrowserMockUpdate(): PendingAppUpdate | null {

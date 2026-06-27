@@ -223,7 +223,7 @@ function panelTitle(updater: AppUpdaterController) {
 }
 
 function panelCopy(updater: AppUpdaterController) {
-  if (updater.state === "checking") return "正在从 GitHub Releases 拉取 updater 元数据。";
+  if (updater.state === "checking") return "正在从 Cloudflare Pages 拉取 updater 元数据。";
   if (updater.state === "available" && updater.update) {
     return `可以从 ${updater.update.currentVersion} 更新到 ${updater.update.version}，下载包会先经过 Tauri 签名校验再安装。`;
   }
@@ -231,9 +231,9 @@ function panelCopy(updater: AppUpdaterController) {
   if (updater.state === "installing")
     return "安装器正在写入新版本，请保持应用运行。Windows 可能会自动退出完成安装。";
   if (updater.state === "installed") return "更新包已完成安装，重启应用后新版本会生效。";
-  if (updater.state === "latest") return "没有发现比当前版本更新的 GitHub Release。";
-  if (updater.state === "error") return "可能是网络、GitHub Release 元数据或签名配置还没准备好。";
-  return "应用会在后台定期检查 GitHub 是否发布了新版本。";
+  if (updater.state === "latest") return "没有发现比当前版本更新的 Cloudflare 更新源。";
+  if (updater.state === "error") return "可能是网络、Cloudflare 更新元数据或签名配置还没准备好。";
+  return "应用会在后台定期检查 Cloudflare 更新源是否发布了新版本。";
 }
 
 function progressLabel(updater: AppUpdaterController) {

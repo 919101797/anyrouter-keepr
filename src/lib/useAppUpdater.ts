@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   checkForAppUpdate,
+  normalizeUpdaterError,
   relaunchApp,
   type AppUpdateInfo,
   type PendingAppUpdate,
@@ -79,7 +80,7 @@ export function useAppUpdater(): AppUpdaterController {
         setOpen(true);
       }
     } catch (checkError) {
-      setError(String(checkError));
+      setError(normalizeUpdaterError(checkError));
       if (manual) {
         setState("error");
         setOpen(true);
@@ -126,7 +127,7 @@ export function useAppUpdater(): AppUpdaterController {
       setState("installed");
       setOpen(true);
     } catch (installError) {
-      setError(String(installError));
+      setError(normalizeUpdaterError(installError));
       setState("error");
       setOpen(true);
     }

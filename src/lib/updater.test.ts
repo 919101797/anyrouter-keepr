@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, reduceDownloadProgress, type ProgressAccumulator } from "./updater";
+import {
+  formatBytes,
+  normalizeUpdaterError,
+  reduceDownloadProgress,
+  type ProgressAccumulator,
+} from "./updater";
 
 describe("updater progress reducer", () => {
   it("starts with the content length reported by Tauri", () => {
@@ -51,5 +56,19 @@ describe("updater progress reducer", () => {
     expect(formatBytes()).toBe("未知大小");
     expect(formatBytes(2048)).toBe("2.0 KB");
     expect(formatBytes(2 * 1024 * 1024)).toBe("2.0 MB");
+  });
+
+  it("explains inaccessible Cloudflare updater metadata", () => {
+    const message = normalizeUpdaterError(new Error("Could not fetch a valid release JSON from the remote"));
+
+    expect(message).toContain("latest.json");
+    expect(message).toContain("匿名下载");
+    expect(message).toContain("release tag");
+  });
+
+  it("keeps unrelated updater errors intact", () => {
+    expect(normalizeUpdaterError(new Error("signature validation failed"))).toBe(
+      "signature validation failed",
+    );
   });
 });
