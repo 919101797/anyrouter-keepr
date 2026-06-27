@@ -372,8 +372,7 @@ jobs:
           const invalid = platforms.filter(
             (platform) =>
               !platform.url ||
-              (!platform.url.startsWith("https://anyrouter-claude-keeper.pages.dev/releases/") &&
-                !platform.url.startsWith("https://github.com/919101797/anyrouter-keepr/releases/download/")) ||
+              !platform.url.startsWith("https://anyrouter-claude-keeper.pages.dev/releases/") ||
               !platform.signature,
           );
 

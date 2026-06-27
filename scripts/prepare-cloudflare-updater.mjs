@@ -51,6 +51,7 @@ const assetFileSet = new Set(assetFiles);
 const oversizedAssetFileSet = new Set(oversizedAssetFiles);
 const platforms = latest.platforms || {};
 const missingAssets = [];
+const removedOversizedPlatforms = [];
 
 for (const [platform, entry] of Object.entries(platforms)) {
   if (!entry || typeof entry !== "object") {
@@ -68,6 +69,8 @@ for (const [platform, entry] of Object.entries(platforms)) {
   }
 
   if (oversizedAssetFileSet.has(fileName)) {
+    delete platforms[platform];
+    removedOversizedPlatforms.push(`${platform}: ${fileName}`);
     continue;
   }
 
@@ -113,9 +116,9 @@ writeFileSync(
 );
 
 console.log(`Prepared Cloudflare updater feed for ${releaseTag} in ${outputDir}`);
-if (oversizedAssetFiles.length > 0) {
+if (removedOversizedPlatforms.length > 0) {
   console.log(
-    `Left oversized assets on their original release URLs because Cloudflare Pages files must be <= ${maxPagesFileSizeBytes} bytes: ${oversizedAssetFiles.join(
+    `Removed oversized updater platform entries because Cloudflare Pages files must be <= ${maxPagesFileSizeBytes} bytes: ${removedOversizedPlatforms.join(
       ", ",
     )}`,
   );
