@@ -626,7 +626,7 @@ fn secret_fingerprint(value: &str) -> String {
     let suffix_len = 6.min(chars.len().saturating_sub(prefix_len));
 
     if chars.len() <= prefix_len + suffix_len {
-        return "*".repeat(chars.len().min(8).max(4));
+        return "*".repeat(chars.len().clamp(4, 8));
     }
 
     let prefix = chars.iter().take(prefix_len).collect::<String>();
