@@ -37,8 +37,22 @@ pub fn run() {
             let db = Arc::new(Database::open_default()?);
             db.migrate()?;
             let scheduler = Arc::new(Mutex::new(SchedulerHandle::new(db.clone())));
-            app.manage(AppState { db, scheduler });
+            let should_restore_scheduler = db.is_enabled().unwrap_or(false);
+            app.manage(AppState {
+                db,
+                scheduler: scheduler.clone(),
+            });
             system::tray::setup_tray(app)?;
+            if should_restore_scheduler {
+                let scheduler = scheduler.clone();
+                tauri::async_runtime::spawn(async move {
+                    system::app_log::info("scheduler.restore", "enabled profile found");
+                    let mut scheduler = scheduler.lock().await;
+                    if let Err(error) = scheduler.start().await {
+                        system::app_log::error("scheduler.restore", error);
+                    }
+                });
+            }
             system::app_log::info("app", "started");
             system::app_log::info(
                 "app",

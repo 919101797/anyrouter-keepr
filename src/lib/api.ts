@@ -11,6 +11,7 @@ import type {
   StoredProfile,
 } from "./types";
 import { DEFAULT_PROMPT_TAGS } from "./promptTags";
+import { DEFAULT_END_TIME, DEFAULT_START_TIME } from "./timeWindow";
 
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -69,9 +70,10 @@ const mockProfile: StoredProfile = {
   min_interval_seconds: 60,
   max_interval_seconds: 120,
   timeout_seconds: 90,
-  start_time: "05:00",
-  end_time: "24:00",
+  start_time: DEFAULT_START_TIME,
+  end_time: DEFAULT_END_TIME,
   enabled: false,
+  prevent_sleep: true,
   stdout_summary_limit_bytes: 2048,
   stderr_summary_limit_bytes: 2048,
   event_flush_count: 5,

@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { contextSizeLabel, effectiveModelValue, effortLabel } from "./lib/modelOptions";
 import { themeModeLabel, type ThemeMode } from "./lib/theme";
+import { formatTimeWindow } from "./lib/timeWindow";
 import { useAppUpdater } from "./lib/useAppUpdater";
 import { useThemeMode } from "./lib/useThemeMode";
 import { useAppStore } from "./store/appStore";
@@ -162,7 +163,8 @@ export default function App() {
                     }s`}
                     promptPool={promptPoolCount ? `${promptPoolCount} 条随机提示词` : "使用默认提示词"}
                     timeout={`${profile?.timeout_seconds ?? 90}s`}
-                    window={`${profile?.start_time ?? "05:00"} - ${profile?.end_time ?? "24:00"}`}
+                    window={formatTimeWindow(profile?.start_time, profile?.end_time)}
+                    sleepPrevention={profile?.prevent_sleep ?? true}
                     autostart={autostartEnabled}
                   />
                 </TabsContent>
@@ -247,6 +249,7 @@ interface RuntimePanelProps {
   promptPool: string;
   timeout: string;
   window: string;
+  sleepPrevention: boolean;
   autostart: boolean;
 }
 
@@ -260,6 +263,7 @@ function RuntimePanel({
   promptPool,
   timeout,
   window,
+  sleepPrevention,
   autostart,
 }: RuntimePanelProps) {
   return (
@@ -270,6 +274,11 @@ function RuntimePanel({
       </div>
       <div className="divide-y divide-[#edf3ef]">
         <Rule icon={Clock4} label="时间窗口" value={window} />
+        <Rule
+          icon={Moon}
+          label="睡眠策略"
+          value={sleepPrevention ? "守护运行时阻止系统睡眠" : "跟随系统睡眠设置"}
+        />
         <Rule icon={Terminal} label="Claude CLI" value={claudePath} />
         <Rule icon={Route} label="Endpoint" value={endpoint} />
         <Rule icon={BrainCircuit} label="Model" value={model} />

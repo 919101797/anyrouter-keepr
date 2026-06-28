@@ -56,6 +56,8 @@ pub struct Profile {
     pub start_time: String,
     pub end_time: String,
     pub enabled: bool,
+    #[serde(default = "default_prevent_sleep")]
+    pub prevent_sleep: bool,
     pub stdout_summary_limit_bytes: usize,
     pub stderr_summary_limit_bytes: usize,
     pub event_flush_count: usize,
@@ -82,9 +84,10 @@ impl Default for Profile {
             min_interval_seconds: 60,
             max_interval_seconds: 120,
             timeout_seconds: 90,
-            start_time: "05:00".to_string(),
+            start_time: "00:00".to_string(),
             end_time: "24:00".to_string(),
             enabled: false,
+            prevent_sleep: default_prevent_sleep(),
             stdout_summary_limit_bytes: 2048,
             stderr_summary_limit_bytes: 2048,
             event_flush_count: 5,
@@ -118,6 +121,8 @@ pub struct StoredProfile {
     pub start_time: String,
     pub end_time: String,
     pub enabled: bool,
+    #[serde(default = "default_prevent_sleep")]
+    pub prevent_sleep: bool,
     pub stdout_summary_limit_bytes: usize,
     pub stderr_summary_limit_bytes: usize,
     pub event_flush_count: usize,
@@ -147,6 +152,7 @@ impl From<Profile> for StoredProfile {
             start_time: profile.start_time,
             end_time: profile.end_time,
             enabled: profile.enabled,
+            prevent_sleep: profile.prevent_sleep,
             stdout_summary_limit_bytes: profile.stdout_summary_limit_bytes,
             stderr_summary_limit_bytes: profile.stderr_summary_limit_bytes,
             event_flush_count: profile.event_flush_count,
@@ -165,6 +171,10 @@ fn default_effort() -> String {
 
 fn default_context_size() -> String {
     "1m".to_string()
+}
+
+fn default_prevent_sleep() -> bool {
+    true
 }
 
 pub fn default_prompt_pool() -> Vec<String> {

@@ -1,6 +1,7 @@
 use tauri::State;
 
 use crate::core::claude_installation::detect_claude_installation;
+use crate::core::time_window::TimeWindow;
 use crate::core::types::{Profile, StoredProfile};
 use crate::AppState;
 
@@ -14,6 +15,8 @@ pub async fn save_profile(
     profile: Profile,
     state: State<'_, AppState>,
 ) -> Result<StoredProfile, String> {
+    TimeWindow::parse(&profile.start_time, &profile.end_time)?;
+
     let previous_path = state
         .db
         .get_profile()
@@ -25,6 +28,10 @@ pub async fn save_profile(
         .db
         .save_profile(profile)
         .map_err(|err| err.to_string())?;
+    {
+        let scheduler = state.scheduler.lock().await;
+        scheduler.refresh_sleep_prevention();
+    }
 
     if previous_path.trim() != saved.claude_binary_path.trim() {
         let installation = detect_claude_installation(&saved.claude_binary_path).await;

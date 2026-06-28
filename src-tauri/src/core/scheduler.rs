@@ -13,6 +13,7 @@ use crate::core::time_window::{seconds_until, TimeWindow};
 use crate::core::types::{AppStatus, ProbeEventDto, ProbeStatus};
 use crate::storage::db::Database;
 use crate::system::app_log;
+use crate::system::power::PowerGuard;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeStatus {
@@ -27,6 +28,7 @@ pub struct SchedulerHandle {
     task: Option<JoinHandle<()>>,
     stop_tx: Option<oneshot::Sender<()>>,
     runtime_status: Arc<StdMutex<RuntimeStatus>>,
+    sleep_prevention: Arc<StdMutex<Option<PowerGuard>>>,
 }
 
 impl SchedulerHandle {
@@ -41,12 +43,14 @@ impl SchedulerHandle {
                 current_state: "paused".to_string(),
                 in_window: false,
             })),
+            sleep_prevention: Arc::new(StdMutex::new(None)),
         }
     }
 
     pub async fn start(&mut self) -> Result<(), String> {
         if self.task.as_ref().is_some_and(|task| !task.is_finished()) {
             self.db.set_enabled(true).map_err(|err| err.to_string())?;
+            self.refresh_sleep_prevention();
             self.update_status(|status| {
                 status.running = true;
                 status.current_state = "running".to_string();
@@ -87,7 +91,9 @@ impl SchedulerHandle {
         let (tx, mut rx) = oneshot::channel();
         let db = self.db.clone();
         let runtime_status = self.runtime_status.clone();
+        let sleep_prevention = self.sleep_prevention.clone();
         self.stop_tx = Some(tx);
+        sync_sleep_prevention(&sleep_prevention, profile.prevent_sleep);
         self.update_status(|status| {
             status.running = true;
             status.current_state = "running".to_string();
@@ -105,6 +111,8 @@ impl SchedulerHandle {
                     }
                 };
 
+                sync_sleep_prevention(&sleep_prevention, profile.prevent_sleep);
+
                 if !profile.enabled {
                     break;
                 }
@@ -113,13 +121,13 @@ impl SchedulerHandle {
                     Ok(window) => window,
                     Err(error) => {
                         app_log::error("scheduler.loop.time_window", error);
-                        let _ = db.set_enabled(false);
                         set_runtime_status(&runtime_status, |status| {
                             status.running = false;
                             status.in_window = false;
                             status.current_state = "config_error".to_string();
                             status.next_probe_at = None;
                         });
+                        clear_sleep_prevention(&sleep_prevention);
                         break;
                     }
                 };
@@ -170,12 +178,12 @@ impl SchedulerHandle {
                 let _ = db.push_event(event);
 
                 if should_stop {
-                    let _ = db.set_enabled(false);
                     set_runtime_status(&runtime_status, |status| {
                         status.running = false;
                         status.current_state = "config_error".to_string();
                         status.next_probe_at = None;
                     });
+                    clear_sleep_prevention(&sleep_prevention);
                     break;
                 }
 
@@ -198,6 +206,7 @@ impl SchedulerHandle {
                 }
             }
             let _ = db.flush_buffer();
+            clear_sleep_prevention(&sleep_prevention);
             set_runtime_status(&runtime_status, |status| {
                 status.running = false;
                 if status.current_state != "config_error" {
@@ -218,6 +227,7 @@ impl SchedulerHandle {
         if let Some(task) = self.task.take() {
             let _ = task.await;
         }
+        self.clear_sleep_prevention();
         self.update_status(|status| {
             status.running = false;
             status.current_state = "paused".to_string();
@@ -237,6 +247,22 @@ impl SchedulerHandle {
     fn update_status(&self, update: impl FnOnce(&mut RuntimeStatus)) {
         set_runtime_status(&self.runtime_status, update);
     }
+
+    pub fn refresh_sleep_prevention(&self) {
+        if !self.runtime_status().running {
+            self.clear_sleep_prevention();
+            return;
+        }
+
+        match self.db.get_runtime_profile() {
+            Ok(profile) => sync_sleep_prevention(&self.sleep_prevention, profile.prevent_sleep),
+            Err(error) => app_log::error("scheduler.power.get_profile", error.to_string()),
+        }
+    }
+
+    fn clear_sleep_prevention(&self) {
+        clear_sleep_prevention(&self.sleep_prevention);
+    }
 }
 
 fn set_runtime_status(
@@ -249,6 +275,41 @@ fn set_runtime_status(
     update(&mut status);
 }
 
+fn sync_sleep_prevention(
+    sleep_prevention: &Arc<StdMutex<Option<PowerGuard>>>,
+    prevent_sleep: bool,
+) {
+    let mut guard = sleep_prevention
+        .lock()
+        .expect("sleep prevention mutex poisoned");
+
+    if prevent_sleep {
+        if guard.is_none() {
+            match PowerGuard::acquire() {
+                Ok(power_guard) => {
+                    app_log::info("scheduler.power", "prevent_sleep enabled");
+                    *guard = Some(power_guard);
+                }
+                Err(error) => app_log::error("scheduler.power", error),
+            }
+        }
+        return;
+    }
+
+    if guard.take().is_some() {
+        app_log::info("scheduler.power", "prevent_sleep disabled");
+    }
+}
+
+fn clear_sleep_prevention(sleep_prevention: &Arc<StdMutex<Option<PowerGuard>>>) {
+    let mut guard = sleep_prevention
+        .lock()
+        .expect("sleep prevention mutex poisoned");
+    if guard.take().is_some() {
+        app_log::info("scheduler.power", "prevent_sleep released");
+    }
+}
+
 pub fn derive_status(
     profile_id: String,
     runtime: RuntimeStatus,
@@ -256,7 +317,9 @@ pub fn derive_status(
     last_success_at: Option<String>,
     consecutive_queue_miss: u64,
 ) -> AppStatus {
-    let current_state = if runtime.current_state == "sleeping" {
+    let current_state = if runtime.current_state == "config_error" {
+        "config_error".to_string()
+    } else if runtime.current_state == "sleeping" {
         "sleeping".to_string()
     } else if runtime.current_state == "probing" {
         "probing".to_string()
@@ -417,5 +480,23 @@ mod tests {
         );
 
         assert_eq!(status.current_state, "probing");
+    }
+
+    #[test]
+    fn derive_status_preserves_runtime_config_error() {
+        let status = derive_status(
+            "default".to_string(),
+            RuntimeStatus {
+                running: false,
+                next_probe_at: None,
+                current_state: "config_error".to_string(),
+                in_window: false,
+            },
+            None,
+            None,
+            0,
+        );
+
+        assert_eq!(status.current_state, "config_error");
     }
 }

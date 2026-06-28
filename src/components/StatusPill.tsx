@@ -1,12 +1,4 @@
-import {
-  CircleAlert,
-  CircleCheckBig,
-  CirclePause,
-  CircleX,
-  Clock,
-  Radar,
-  RadioReceiver,
-} from "lucide-react";
+import { CircleAlert, CircleCheckBig, CirclePause, CircleX, Clock, Radar, RadioReceiver } from "lucide-react";
 import { Badge } from "./ui/badge";
 import type { ProbeStatus } from "../lib/types";
 

@@ -1,5 +1,5 @@
 use tauri::menu::MenuBuilder;
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, Manager};
 
 use crate::AppState;
@@ -11,9 +11,12 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
         .text("quit", "退出")
         .build()?;
 
-    let mut builder = TrayIconBuilder::with_id("main")
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../../icons/icon.png"))?;
+
+    TrayIconBuilder::with_id("main")
+        .icon(icon)
         .menu(&menu)
-        .show_menu_on_left_click(true)
+        .show_menu_on_left_click(false)
         .tooltip("AnyRouter Keeper")
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => {
@@ -26,12 +29,21 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
                 app.exit(0);
             }
             _ => {}
-        });
-
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
-
-    builder.build(app)?;
+        })
+        .on_tray_icon_event(|tray, event| match event {
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            }
+            | TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            } => {
+                crate::system::window::show_main_window(tray.app_handle());
+            }
+            _ => {}
+        })
+        .build(app)?;
     Ok(())
 }

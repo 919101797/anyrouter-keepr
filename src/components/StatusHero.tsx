@@ -15,6 +15,7 @@ import {
   modelDisplayName,
   runtimeModelSelectValue,
 } from "../lib/modelOptions";
+import { formatTimeWindow, isAllDayWindow } from "../lib/timeWindow";
 import { formatClock, formatRelativeTime } from "../lib/utils";
 import type { AppStatus, ClaudeInstallation, ProfileInput, StoredProfile } from "../lib/types";
 import type { ClaudeRuntimeConfig } from "../lib/types";
@@ -76,6 +77,8 @@ export function StatusHero({
   const endpoint = profile?.base_url?.trim() || "Claude Code / cc-switch 当前配置";
   const cliPath = claudeInstallation?.effective_path || profile?.claude_binary_path?.trim() || "PATH: claude";
   const cliVersion = claudeInstallation?.version || "未检测版本";
+  const windowLabel = formatTimeWindow(profile?.start_time, profile?.end_time);
+  const allDayWindow = isAllDayWindow(profile?.start_time, profile?.end_time);
   const tone =
     state === "connected"
       ? statusTone.connected
@@ -233,7 +236,7 @@ export function StatusHero({
             {headline}
           </h1>
           <p className="status-hero-copy mt-3 max-w-2xl text-sm font-medium leading-6">
-            05:00 - 24:00 随机探测，遇到队列错误继续保持活性。
+            {allDayWindow ? "全天候随机探测" : `${windowLabel} 随机探测`}，遇到队列错误继续保持活性。
           </p>
 
           <div className="mt-6 grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
@@ -247,7 +250,11 @@ export function StatusHero({
         <div className="status-hero-side-panel flex min-w-0 flex-col justify-between gap-4 rounded-[8px] border p-4">
           <div className="space-y-3">
             <SideFact icon={Terminal} label="Claude" value={cliVersion} />
-            <SideFact icon={Clock3} label="状态窗口" value={status?.in_window ? "窗口内" : "窗口外"} />
+            <SideFact
+              icon={Clock3}
+              label="状态窗口"
+              value={allDayWindow ? "全天候" : status?.in_window ? "窗口内" : "窗口外"}
+            />
           </div>
           <div className="grid gap-2">
             <Button

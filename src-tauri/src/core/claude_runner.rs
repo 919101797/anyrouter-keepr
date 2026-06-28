@@ -364,6 +364,9 @@ fn add_empty_mcp_config_arg(
     command: &mut Command,
     temp_files: &mut Vec<PathBuf>,
 ) -> io::Result<()> {
+    #[cfg(not(windows))]
+    let _ = temp_files;
+
     command.arg("--mcp-config");
 
     #[cfg(windows)]

@@ -17,6 +17,7 @@ export interface StoredProfile {
   start_time: string;
   end_time: string;
   enabled: boolean;
+  prevent_sleep: boolean;
   stdout_summary_limit_bytes: number;
   stderr_summary_limit_bytes: number;
   event_flush_count: number;

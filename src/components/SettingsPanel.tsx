@@ -18,6 +18,7 @@ import {
   normalizePromptTags,
   promptTagsForUi,
 } from "../lib/promptTags";
+import { DEFAULT_END_TIME, DEFAULT_START_TIME, isAllDayWindow } from "../lib/timeWindow";
 import { formatClock } from "../lib/utils";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -75,9 +76,10 @@ export function SettingsPanel({
             min_interval_seconds: 60,
             max_interval_seconds: 120,
             timeout_seconds: 90,
-            start_time: "05:00",
-            end_time: "24:00",
+            start_time: DEFAULT_START_TIME,
+            end_time: DEFAULT_END_TIME,
             enabled: false,
+            prevent_sleep: true,
             stdout_summary_limit_bytes: 2048,
             stderr_summary_limit_bytes: 2048,
             event_flush_count: 5,
@@ -100,6 +102,12 @@ export function SettingsPanel({
   const promptTags = normalizePromptTags(draft.prompt_pool);
   const promptPoolCount = promptTags.length;
   const [newPromptTag, setNewPromptTag] = useState("");
+  const allDayWindow = isAllDayWindow(draft.start_time, draft.end_time);
+  const [customWindowDraft, setCustomWindowDraft] = useState(() =>
+    isAllDayWindow(initial.start_time, initial.end_time)
+      ? { start_time: "09:00", end_time: "18:00" }
+      : { start_time: initial.start_time, end_time: initial.end_time },
+  );
 
   const update = <K extends keyof ProfileInput>(key: K, value: ProfileInput[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -126,6 +134,23 @@ export function SettingsPanel({
 
   const updatePromptTags = (tags: string[]) => {
     update("prompt_pool", normalizePromptTags(tags));
+  };
+
+  const updateAllDayWindow = (checked: boolean) => {
+    if (checked) {
+      if (!allDayWindow) {
+        setCustomWindowDraft({ start_time: draft.start_time, end_time: draft.end_time });
+      }
+      setDraft((current) => ({ ...current, start_time: DEFAULT_START_TIME, end_time: DEFAULT_END_TIME }));
+      return;
+    }
+
+    setDraft((current) => ({ ...current, ...customWindowDraft }));
+  };
+
+  const updateWindowTime = (key: "start_time" | "end_time", value: string) => {
+    setCustomWindowDraft((current) => ({ ...current, [key]: value }));
+    update(key, value);
   };
 
   const addPromptTag = () => {
@@ -347,14 +372,29 @@ export function SettingsPanel({
                 onChange={(value) => update("timeout_seconds", value)}
               />
             </Field>
+            <div className="sm:col-span-3">
+              <ToggleRow
+                label="全天候守护"
+                note={allDayWindow ? "00:00 - 24:00" : "使用自定义时间段"}
+                checked={allDayWindow}
+                onCheckedChange={updateAllDayWindow}
+              />
+            </div>
             <Field label="开始时间（HH:mm）">
               <Input
+                inputMode="numeric"
                 value={draft.start_time}
-                onChange={(event) => update("start_time", event.target.value)}
+                disabled={allDayWindow}
+                onChange={(event) => updateWindowTime("start_time", event.target.value)}
               />
             </Field>
             <Field label="结束时间（HH:mm）">
-              <Input value={draft.end_time} onChange={(event) => update("end_time", event.target.value)} />
+              <Input
+                inputMode="numeric"
+                value={draft.end_time}
+                disabled={allDayWindow}
+                onChange={(event) => updateWindowTime("end_time", event.target.value)}
+              />
             </Field>
           </div>
         </Section>
@@ -413,6 +453,12 @@ export function SettingsPanel({
               note="启动守护后自动同步"
               checked={draft.enabled}
               onCheckedChange={(value) => update("enabled", value)}
+            />
+            <ToggleRow
+              label="守护时阻止系统睡眠"
+              note="默认开启，系统睡眠会暂停普通应用"
+              checked={draft.prevent_sleep}
+              onCheckedChange={(value) => update("prevent_sleep", value)}
             />
             <ToggleRow
               label="开机自启"

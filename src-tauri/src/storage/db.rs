@@ -32,6 +32,8 @@ pub struct Database {
     path: PathBuf,
 }
 
+const LEGACY_DEFAULT_TIME_WINDOW_MIGRATION_KEY: &str = "legacy_default_time_window_v1";
+
 impl Database {
     pub fn open_default() -> Result<Self, DbError> {
         let base_dir = dirs::data_dir()
@@ -78,6 +80,7 @@ impl Database {
               start_time TEXT NOT NULL,
               end_time TEXT NOT NULL,
               enabled INTEGER NOT NULL,
+              prevent_sleep INTEGER NOT NULL DEFAULT 1,
               stdout_summary_limit_bytes INTEGER NOT NULL,
               stderr_summary_limit_bytes INTEGER NOT NULL,
               event_flush_count INTEGER NOT NULL,
@@ -169,6 +172,13 @@ impl Database {
             "prompt_truncated",
             "INTEGER NOT NULL DEFAULT 0",
         )?;
+        add_column_if_missing(
+            &conn,
+            "profiles",
+            "prevent_sleep",
+            "INTEGER NOT NULL DEFAULT 1",
+        )?;
+        migrate_legacy_default_time_window(&conn)?;
         Ok(())
     }
 
@@ -193,7 +203,7 @@ impl Database {
                 r#"
                 SELECT id, name, base_url, token_kind, model, effort, context_size, prompt, prompt_pool,
                        claude_binary_path, min_interval_seconds, max_interval_seconds, timeout_seconds,
-                       start_time, end_time, enabled,
+                       start_time, end_time, enabled, prevent_sleep,
                        stdout_summary_limit_bytes, stderr_summary_limit_bytes,
                        event_flush_count, event_flush_interval_seconds,
                        history_retention_days, max_events_per_profile, max_database_size_mb
@@ -219,13 +229,14 @@ impl Database {
                         start_time: row.get(13)?,
                         end_time: row.get(14)?,
                         enabled: row.get::<_, i64>(15)? != 0,
-                        stdout_summary_limit_bytes: row.get::<_, i64>(16)? as usize,
-                        stderr_summary_limit_bytes: row.get::<_, i64>(17)? as usize,
-                        event_flush_count: row.get::<_, i64>(18)? as usize,
-                        event_flush_interval_seconds: row.get::<_, i64>(19)? as u64,
-                        history_retention_days: row.get(20)?,
-                        max_events_per_profile: row.get(21)?,
-                        max_database_size_mb: row.get(22)?,
+                        prevent_sleep: row.get::<_, i64>(16)? != 0,
+                        stdout_summary_limit_bytes: row.get::<_, i64>(17)? as usize,
+                        stderr_summary_limit_bytes: row.get::<_, i64>(18)? as usize,
+                        event_flush_count: row.get::<_, i64>(19)? as usize,
+                        event_flush_interval_seconds: row.get::<_, i64>(20)? as u64,
+                        history_retention_days: row.get(21)?,
+                        max_events_per_profile: row.get(22)?,
+                        max_database_size_mb: row.get(23)?,
                     })
                 },
             )
@@ -251,12 +262,12 @@ impl Database {
             INSERT INTO profiles (
                 id, name, claude_binary_path, base_url, token_kind, model, effort, context_size, prompt, prompt_pool,
                 min_interval_seconds, max_interval_seconds, timeout_seconds,
-                start_time, end_time, enabled,
+                start_time, end_time, enabled, prevent_sleep,
                 stdout_summary_limit_bytes, stderr_summary_limit_bytes,
                 event_flush_count, event_flush_interval_seconds,
                 history_retention_days, max_events_per_profile, max_database_size_mb,
                 created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?24)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?25)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 claude_binary_path = excluded.claude_binary_path,
@@ -273,6 +284,7 @@ impl Database {
                 start_time = excluded.start_time,
                 end_time = excluded.end_time,
                 enabled = excluded.enabled,
+                prevent_sleep = excluded.prevent_sleep,
                 stdout_summary_limit_bytes = excluded.stdout_summary_limit_bytes,
                 stderr_summary_limit_bytes = excluded.stderr_summary_limit_bytes,
                 event_flush_count = excluded.event_flush_count,
@@ -299,6 +311,7 @@ impl Database {
                 profile.start_time,
                 profile.end_time,
                 if profile.enabled { 1 } else { 0 },
+                if profile.prevent_sleep { 1 } else { 0 },
                 profile.stdout_summary_limit_bytes as i64,
                 profile.stderr_summary_limit_bytes as i64,
                 profile.event_flush_count as i64,
@@ -397,6 +410,10 @@ impl Database {
         profile.enabled = enabled;
         self.save_profile(profile)?;
         Ok(())
+    }
+
+    pub fn is_enabled(&self) -> Result<bool, DbError> {
+        Ok(self.get_profile_raw()?.unwrap_or_default().enabled)
     }
 
     pub fn push_event(&self, event: ProbeEvent) -> Result<(), DbError> {
@@ -740,6 +757,40 @@ fn prompt_pool_json(pool: &[String]) -> String {
     serde_json::to_string(pool).unwrap_or_else(|_| "[]".to_string())
 }
 
+fn migrate_legacy_default_time_window(conn: &Connection) -> Result<(), DbError> {
+    let migrated = conn
+        .query_row(
+            "SELECT value FROM app_state WHERE key = ?1",
+            params![LEGACY_DEFAULT_TIME_WINDOW_MIGRATION_KEY],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+        .is_some();
+
+    if migrated {
+        return Ok(());
+    }
+
+    let now = Local::now().to_rfc3339();
+    conn.execute(
+        r#"
+        UPDATE profiles
+        SET start_time = '00:00', end_time = '24:00', updated_at = ?1
+        WHERE start_time = '05:00' AND end_time = '24:00'
+        "#,
+        params![now],
+    )?;
+    conn.execute(
+        r#"
+        INSERT INTO app_state (key, value, updated_at)
+        VALUES (?1, '1', ?2)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        "#,
+        params![LEGACY_DEFAULT_TIME_WINDOW_MIGRATION_KEY, now],
+    )?;
+    Ok(())
+}
+
 fn trim_to_chars(value: &str, max_chars: usize) -> String {
     value.chars().take(max_chars).collect()
 }
@@ -901,6 +952,21 @@ mod tests {
     }
 
     #[test]
+    fn saves_sleep_prevention_with_profile() {
+        let db = test_db();
+        assert!(db.get_profile().unwrap().prevent_sleep);
+
+        db.save_profile(Profile {
+            token: None,
+            prevent_sleep: false,
+            ..Profile::default()
+        })
+        .unwrap();
+
+        assert!(!db.get_profile().unwrap().prevent_sleep);
+    }
+
+    #[test]
     fn saves_prompt_pool_with_profile() {
         let db = test_db();
         db.save_profile(Profile {
@@ -941,6 +1007,44 @@ mod tests {
             ),
             default_prompt_pool()
         );
+    }
+
+    #[test]
+    fn migrates_legacy_default_time_window_once() {
+        let db = test_db();
+        db.save_profile(Profile {
+            token: None,
+            start_time: "05:00".to_string(),
+            end_time: "24:00".to_string(),
+            ..Profile::default()
+        })
+        .unwrap();
+
+        {
+            let conn = db.conn.lock().expect("db mutex poisoned");
+            conn.execute(
+                "DELETE FROM app_state WHERE key = ?1",
+                params![LEGACY_DEFAULT_TIME_WINDOW_MIGRATION_KEY],
+            )
+            .unwrap();
+        }
+
+        db.migrate().unwrap();
+        let profile = db.get_profile().unwrap();
+        assert_eq!(profile.start_time, "00:00");
+        assert_eq!(profile.end_time, "24:00");
+
+        db.save_profile(Profile {
+            token: None,
+            start_time: "05:00".to_string(),
+            end_time: "24:00".to_string(),
+            ..Profile::default()
+        })
+        .unwrap();
+        db.migrate().unwrap();
+        let profile = db.get_profile().unwrap();
+        assert_eq!(profile.start_time, "05:00");
+        assert_eq!(profile.end_time, "24:00");
     }
 
     #[test]
