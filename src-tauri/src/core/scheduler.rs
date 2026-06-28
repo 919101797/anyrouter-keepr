@@ -73,17 +73,14 @@ impl SchedulerHandle {
                 );
             }
             Err(error) => {
-                app_log::error("scheduler.start.resolve_claude", &error.message);
-                let event = claude_not_found_event(&profile, &error.message);
-                self.db.push_event(event).map_err(|err| err.to_string())?;
-                self.db.flush_buffer().map_err(|err| err.to_string())?;
-                self.update_status(|status| {
-                    status.running = false;
-                    status.in_window = false;
-                    status.current_state = "config_error".to_string();
-                    status.next_probe_at = None;
-                });
-                return Err(error.message);
+                app_log::error(
+                    "scheduler.start.resolve_claude",
+                    format!("{}; scheduler will keep retrying", error.message),
+                );
+                let _ = self
+                    .db
+                    .push_event(claude_not_found_event(&profile, &error.message));
+                let _ = self.db.flush_buffer();
             }
         }
 
@@ -101,7 +98,7 @@ impl SchedulerHandle {
         });
 
         self.task = Some(tokio::spawn(async move {
-            loop {
+            let exit_reason = loop {
                 let profile = match db.get_runtime_profile() {
                     Ok(profile) => profile,
                     Err(error) => {
@@ -114,21 +111,27 @@ impl SchedulerHandle {
                 sync_sleep_prevention(&sleep_prevention, profile.prevent_sleep);
 
                 if !profile.enabled {
-                    break;
+                    break "profile_disabled".to_string();
                 }
 
                 let window = match TimeWindow::parse(&profile.start_time, &profile.end_time) {
                     Ok(window) => window,
                     Err(error) => {
                         app_log::error("scheduler.loop.time_window", error);
+                        let next_probe = Local::now() + chrono::Duration::seconds(30);
                         set_runtime_status(&runtime_status, |status| {
-                            status.running = false;
+                            status.running = true;
                             status.in_window = false;
                             status.current_state = "config_error".to_string();
-                            status.next_probe_at = None;
+                            status.next_probe_at = Some(next_probe.to_rfc3339());
                         });
-                        clear_sleep_prevention(&sleep_prevention);
-                        break;
+                        tokio::select! {
+                            _ = sleep(Duration::from_secs(30)) => {},
+                            _ = &mut rx => {
+                                break "stop_signal".to_string();
+                            },
+                        }
+                        continue;
                     }
                 };
 
@@ -144,7 +147,9 @@ impl SchedulerHandle {
                     let wait = seconds_until(next_start).min(3600);
                     tokio::select! {
                         _ = sleep(Duration::from_secs(wait.max(1))) => {},
-                        _ = &mut rx => break,
+                        _ = &mut rx => {
+                            break "stop_signal".to_string();
+                        },
                     }
                     continue;
                 }
@@ -157,7 +162,6 @@ impl SchedulerHandle {
                 });
 
                 let event = run_probe(&profile).await;
-                let should_stop = event.status == ProbeStatus::ConfigError;
                 app_log::info(
                     "scheduler.probe",
                     format!(
@@ -177,16 +181,6 @@ impl SchedulerHandle {
                 .to_string();
                 let _ = db.push_event(event);
 
-                if should_stop {
-                    set_runtime_status(&runtime_status, |status| {
-                        status.running = false;
-                        status.current_state = "config_error".to_string();
-                        status.next_probe_at = None;
-                    });
-                    clear_sleep_prevention(&sleep_prevention);
-                    break;
-                }
-
                 let min = profile
                     .min_interval_seconds
                     .min(profile.max_interval_seconds)
@@ -202,9 +196,12 @@ impl SchedulerHandle {
                 });
                 tokio::select! {
                     _ = sleep(Duration::from_secs(wait)) => {},
-                    _ = &mut rx => break,
+                    _ = &mut rx => {
+                        break "stop_signal".to_string();
+                    },
                 }
-            }
+            };
+            app_log::info("scheduler.loop", format!("exiting reason={exit_reason}"));
             let _ = db.flush_buffer();
             clear_sleep_prevention(&sleep_prevention);
             set_runtime_status(&runtime_status, |status| {
@@ -373,7 +370,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn start_reports_config_error_when_claude_path_is_missing() {
+    async fn start_keeps_running_when_claude_path_is_missing() {
         let dir = tempdir().expect("temp dir");
         let db = Arc::new(Database::open(dir.path().join("scheduler.sqlite3")).expect("open db"));
         db.migrate().expect("migrate db");
@@ -393,15 +390,18 @@ mod tests {
         let mut scheduler = SchedulerHandle::new(db.clone());
         let result = scheduler.start().await;
 
-        assert!(result.is_err());
+        assert!(result.is_ok());
         let status = scheduler.runtime_status();
-        assert!(!status.running);
-        assert_eq!(status.current_state, "config_error");
+        assert!(status.running);
 
         let events = db.list_events(10, None).expect("list events");
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].status, ProbeStatus::ConfigError);
-        assert_eq!(events[0].error_kind.as_deref(), Some("claude_not_found"));
+        assert!(!events.is_empty());
+        assert!(events.iter().any(|event| {
+            event.status == ProbeStatus::ConfigError
+                && event.error_kind.as_deref() == Some("claude_not_found")
+        }));
+
+        scheduler.pause().await.expect("pause scheduler");
     }
 
     #[tokio::test]

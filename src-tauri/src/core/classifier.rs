@@ -29,6 +29,10 @@ pub fn classify(
         return config("claude_not_found");
     }
 
+    if stream_json_reports_success(stdout) {
+        return success();
+    }
+
     for code in ["401", "403"] {
         if contains_http_code(&combined, code) {
             return config(code);
@@ -72,16 +76,21 @@ pub fn classify(
     }
 
     if exit_code.unwrap_or(1) == 0 {
-        return Classification {
-            status: ProbeStatus::Success,
-            error_kind: None,
-        };
+        return success();
     }
 
     Classification {
         status: ProbeStatus::Unknown,
         error_kind: Some("unknown".to_string()),
     }
+}
+
+fn stream_json_reports_success(stdout: &str) -> bool {
+    stdout.lines().any(|line| {
+        let line = line.trim().to_lowercase();
+        line.contains(r#""type":"result""#)
+            && (line.contains(r#""subtype":"success""#) || line.contains(r#""is_error":false"#))
+    })
 }
 
 fn contains_http_code(text: &str, code: &str) -> bool {
@@ -104,6 +113,13 @@ fn config(kind: &str) -> Classification {
     Classification {
         status: ProbeStatus::ConfigError,
         error_kind: Some(kind.to_string()),
+    }
+}
+
+fn success() -> Classification {
+    Classification {
+        status: ProbeStatus::Success,
+        error_kind: None,
     }
 }
 
@@ -168,6 +184,28 @@ mod tests {
     #[test]
     fn success_when_exit_zero() {
         let result = classify(Some(0), false, "{\"result\":\"OK\"}", "");
+        assert_eq!(result.status, ProbeStatus::Success);
+    }
+
+    #[test]
+    fn stream_success_wins_over_assistant_text_keywords() {
+        let stdout = r#"{"type":"system","subtype":"init"}
+{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"This likely refers to an authentication token."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"token means credential"}"#;
+
+        let result = classify(Some(0), false, stdout, "");
+
+        assert_eq!(result.status, ProbeStatus::Success);
+        assert_eq!(result.error_kind, None);
+    }
+
+    #[test]
+    fn stream_success_wins_over_rate_limit_explanation() {
+        let stdout = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"A rate limit is a request quota."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"A rate limit is a request quota."}"#;
+
+        let result = classify(Some(0), false, stdout, "");
+
         assert_eq!(result.status, ProbeStatus::Success);
     }
 }
