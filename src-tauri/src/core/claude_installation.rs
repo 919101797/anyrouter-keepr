@@ -14,6 +14,7 @@ use tokio::time::timeout;
 use crate::core::types::ClaudeInstallation;
 
 const VERSION_TIMEOUT_SECONDS: u64 = 5;
+#[cfg(unix)]
 const SHELL_LOOKUP_TIMEOUT_SECONDS: u64 = 4;
 const SUMMARY_LIMIT: usize = 300;
 
@@ -188,11 +189,7 @@ fn command_path(binary: &str) -> OsString {
 async fn resolve_configured_path(value: &str) -> Option<(PathBuf, String)> {
     let path = PathBuf::from(value);
     if path.is_absolute() || value.contains(path::MAIN_SEPARATOR) {
-        if is_executable_file(&path) {
-            Some((path, "manual".to_string()))
-        } else {
-            None
-        }
+        resolve_invocable_path(&path).map(|path| (path, "manual".to_string()))
     } else if let Some(path) = find_binary_in_path(value) {
         Some((path, "manual".to_string()))
     } else {
@@ -219,14 +216,14 @@ fn find_binary_in_path(binary_name: &str) -> Option<PathBuf> {
 fn find_binary_in_dirs(binary_name: &str, dirs: Vec<PathBuf>) -> Option<PathBuf> {
     dirs.into_iter()
         .flat_map(|dir| candidate_files(&dir, binary_name))
-        .find(|path| is_executable_file(path))
+        .find_map(|path| resolve_invocable_path(&path))
 }
 
 #[cfg(test)]
 fn resolve_configured_path_in_dirs(value: &str, dirs: Vec<PathBuf>) -> Option<PathBuf> {
     let path = PathBuf::from(value);
     if path.is_absolute() || value.contains(path::MAIN_SEPARATOR) {
-        is_executable_file(&path).then_some(path)
+        resolve_invocable_path(&path)
     } else {
         find_binary_in_dirs(value, dirs)
     }
@@ -365,14 +362,15 @@ fn push_unique_dir(dirs: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>, dir: P
 fn candidate_files(dir: &Path, binary_name: &str) -> Vec<PathBuf> {
     #[cfg(windows)]
     {
-        let path_ext = env::var("PATHEXT").unwrap_or_else(|_| ".EXE;.CMD;.BAT".to_string());
-        let mut files = vec![dir.join(binary_name)];
-        files.extend(
-            path_ext
-                .split(';')
-                .filter(|ext| !ext.is_empty())
-                .map(|ext| dir.join(format!("{binary_name}{ext}"))),
-        );
+        if Path::new(binary_name).extension().is_some() {
+            return vec![dir.join(binary_name)];
+        }
+
+        let mut files = windows_command_extensions()
+            .into_iter()
+            .map(|ext| dir.join(format!("{binary_name}{ext}")))
+            .collect::<Vec<_>>();
+        files.push(dir.join(binary_name));
         files
     }
 
@@ -432,6 +430,7 @@ async fn find_binary_in_user_shell(_binary_name: &str) -> Option<PathBuf> {
     None
 }
 
+#[cfg(unix)]
 fn is_plain_binary_name(binary_name: &str) -> bool {
     !binary_name.is_empty()
         && binary_name
@@ -466,6 +465,171 @@ fn is_executable_file(path: &Path) -> bool {
     #[cfg(not(unix))]
     {
         true
+    }
+}
+
+fn resolve_invocable_path(path: &Path) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        resolve_windows_invocable_path(path)
+    }
+
+    #[cfg(not(windows))]
+    {
+        is_executable_file(path).then(|| path.to_path_buf())
+    }
+}
+
+#[cfg(windows)]
+fn resolve_windows_invocable_path(path: &Path) -> Option<PathBuf> {
+    if let Some(target) = resolve_windows_npm_claude_native_target(path) {
+        return Some(target);
+    }
+
+    if is_windows_spawnable_file(path) {
+        return Some(path.to_path_buf());
+    }
+
+    if path.extension().is_some() {
+        return None;
+    }
+
+    windows_command_extensions()
+        .into_iter()
+        .map(|ext| path.with_extension(ext.trim_start_matches('.')))
+        .find_map(|candidate| resolve_windows_invocable_path(&candidate))
+}
+
+#[cfg(windows)]
+fn is_windows_spawnable_file(path: &Path) -> bool {
+    if !is_executable_file(path) {
+        return false;
+    }
+
+    if has_windows_command_extension(path) {
+        return true;
+    }
+
+    is_windows_native_executable(path)
+}
+
+#[cfg(windows)]
+fn has_windows_command_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "exe" | "cmd" | "bat" | "com"
+            )
+        })
+}
+
+#[cfg(windows)]
+fn is_windows_native_executable(path: &Path) -> bool {
+    fs::read(path)
+        .ok()
+        .is_some_and(|bytes| bytes.starts_with(b"MZ"))
+}
+
+#[cfg(windows)]
+fn resolve_windows_npm_claude_native_target(path: &Path) -> Option<PathBuf> {
+    if !is_windows_shim_candidate(path) {
+        return None;
+    }
+
+    let contents = fs::read_to_string(path).ok()?;
+    let normalized = contents.replace('/', "\\").to_ascii_lowercase();
+    if !normalized.contains("@anthropic-ai\\claude-code\\bin\\claude.exe") {
+        return None;
+    }
+
+    windows_npm_claude_native_candidates(path)
+        .into_iter()
+        .find(|candidate| is_windows_native_executable(candidate))
+}
+
+#[cfg(windows)]
+fn is_windows_shim_candidate(path: &Path) -> bool {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        None => true,
+        Some(ext) => matches!(ext.to_ascii_lowercase().as_str(), "cmd" | "bat"),
+    }
+}
+
+#[cfg(windows)]
+fn windows_npm_claude_native_candidates(path: &Path) -> Vec<PathBuf> {
+    let Some(parent) = path.parent() else {
+        return Vec::new();
+    };
+
+    let mut candidates = vec![parent
+        .join("node_modules")
+        .join("@anthropic-ai")
+        .join("claude-code")
+        .join("bin")
+        .join("claude.exe")];
+
+    if parent
+        .file_name()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case(".bin"))
+    {
+        if let Some(node_modules) = parent.parent() {
+            candidates.push(
+                node_modules
+                    .join("@anthropic-ai")
+                    .join("claude-code")
+                    .join("bin")
+                    .join("claude.exe"),
+            );
+        }
+    }
+
+    candidates
+}
+
+#[cfg(windows)]
+fn windows_command_extensions() -> Vec<String> {
+    let mut seen = HashSet::<String>::new();
+    let mut extensions = Vec::new();
+
+    if let Ok(path_ext) = env::var("PATHEXT") {
+        for ext in path_ext.split(';') {
+            push_windows_command_extension(&mut extensions, &mut seen, ext);
+        }
+    }
+
+    for ext in [".EXE", ".CMD", ".BAT", ".COM"] {
+        push_windows_command_extension(&mut extensions, &mut seen, ext);
+    }
+
+    extensions
+}
+
+#[cfg(windows)]
+fn push_windows_command_extension(
+    extensions: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+    ext: &str,
+) {
+    let trimmed = ext.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+
+    let normalized = if trimmed.starts_with('.') {
+        trimmed.to_string()
+    } else {
+        format!(".{trimmed}")
+    };
+    let lower = normalized.to_ascii_lowercase();
+    if !matches!(lower.as_str(), ".exe" | ".cmd" | ".bat" | ".com") {
+        return;
+    }
+
+    if seen.insert(lower) {
+        extensions.push(normalized);
     }
 }
 
@@ -522,17 +686,51 @@ mod tests {
         fs::set_permissions(path, permissions).unwrap();
     }
 
-    #[tokio::test]
-    async fn manual_path_reports_version() {
-        let dir = tempdir().unwrap();
-        let script = dir.path().join("claude");
+    #[cfg(unix)]
+    fn fake_claude_path(dir: &Path, name: &str) -> PathBuf {
+        dir.join(name)
+    }
+
+    #[cfg(windows)]
+    fn fake_claude_path(dir: &Path, name: &str) -> PathBuf {
+        dir.join(format!("{name}.CMD"))
+    }
+
+    #[cfg(unix)]
+    fn write_fake_claude(path: &Path) {
+        fs::write(path, "#!/bin/sh\necho ok\n").unwrap();
+        make_executable(path);
+    }
+
+    #[cfg(windows)]
+    fn write_fake_claude(path: &Path) {
+        fs::write(path, "@echo off\r\necho ok\r\n").unwrap();
+    }
+
+    #[cfg(unix)]
+    fn write_fake_claude_version(path: &Path) {
         fs::write(
-            &script,
+            path,
             "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '2.1.170 (Claude Code)'; exit 0; fi\n",
         )
         .unwrap();
-        #[cfg(unix)]
-        make_executable(&script);
+        make_executable(path);
+    }
+
+    #[cfg(windows)]
+    fn write_fake_claude_version(path: &Path) {
+        fs::write(
+            path,
+            "@echo off\r\nif \"%~1\"==\"--version\" echo 2.1.170 (Claude Code)\r\n",
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn manual_path_reports_version() {
+        let dir = tempdir().unwrap();
+        let script = fake_claude_path(dir.path(), "claude");
+        write_fake_claude_version(&script);
 
         let installation = detect_claude_installation(&path_to_string(script)).await;
 
@@ -546,7 +744,9 @@ mod tests {
 
     #[tokio::test]
     async fn missing_manual_path_is_invalid() {
-        let installation = detect_claude_installation("/definitely/missing/claude").await;
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("definitely").join("missing").join("claude");
+        let installation = detect_claude_installation(&path_to_string(missing)).await;
 
         assert_eq!(installation.status, "invalid");
         assert_eq!(installation.source, "manual");
@@ -573,10 +773,8 @@ mod tests {
     #[test]
     fn finds_executable_binary_from_candidate_dirs() {
         let dir = tempdir().unwrap();
-        let script = dir.path().join("claude");
-        fs::write(&script, "#!/bin/sh\necho ok\n").unwrap();
-        #[cfg(unix)]
-        make_executable(&script);
+        let script = fake_claude_path(dir.path(), "claude");
+        write_fake_claude(&script);
 
         let found = find_binary_in_dirs("claude", vec![dir.path().to_path_buf()]);
 
@@ -586,15 +784,40 @@ mod tests {
     #[test]
     fn resolves_manual_binary_name_through_candidate_dirs() {
         let dir = tempdir().unwrap();
-        let script = dir.path().join("claude-test");
-        fs::write(&script, "#!/bin/sh\necho ok\n").unwrap();
-        #[cfg(unix)]
-        make_executable(&script);
+        let script = fake_claude_path(dir.path(), "claude-test");
+        write_fake_claude(&script);
 
         let resolved =
             resolve_configured_path_in_dirs("claude-test", vec![dir.path().to_path_buf()]);
 
         assert_eq!(resolved.as_deref(), Some(script.as_path()));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolves_windows_npm_claude_shim_to_native_exe() {
+        let dir = tempdir().unwrap();
+        let target = dir
+            .path()
+            .join("node_modules")
+            .join("@anthropic-ai")
+            .join("claude-code")
+            .join("bin")
+            .join("claude.exe");
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::copy(std::env::current_exe().unwrap(), &target).unwrap();
+        let shim = dir.path().join("claude.cmd");
+        fs::write(
+            &shim,
+            r#"@ECHO off
+"%dp0%\node_modules\@anthropic-ai\claude-code\bin\claude.exe"   %*
+"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_configured_path_in_dirs("claude", vec![dir.path().to_path_buf()]);
+
+        assert_eq!(resolved.as_deref(), Some(target.as_path()));
     }
 
     #[test]

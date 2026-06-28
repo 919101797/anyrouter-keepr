@@ -1,3 +1,6 @@
+use std::fs;
+use std::io;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration as StdDuration;
 
@@ -10,12 +13,15 @@ use uuid::Uuid;
 
 use crate::core::classifier::classify;
 use crate::core::claude_installation::{apply_claude_command_path, resolve_claude_binary};
-use crate::core::claude_runtime_config::detect_claude_runtime_config;
+use crate::core::claude_runtime_config::{
+    detect_claude_key_summary, detect_claude_runtime_config, summarize_configured_key,
+};
 use crate::core::redactor::summarize_and_redact;
 use crate::core::types::{ProbeEvent, ProbeStatus, Profile};
 use crate::system::app_log;
 
 const FALLBACK_PROMPT: &str = "只回复 OK";
+const EMPTY_MCP_CONFIG: &[u8] = br#"{"mcpServers":{}}"#;
 const MAX_PROMPT_CHARS: usize = 1_000;
 const MAX_PROMPT_SUMMARY_BYTES: usize = 1_024;
 
@@ -40,12 +46,15 @@ pub async fn run_probe(profile: &Profile) -> ProbeEvent {
 
 pub fn claude_not_found_event(profile: &Profile, message: &str) -> ProbeEvent {
     let started_at = Local::now();
+    let token = profile.token.clone().unwrap_or_default();
+    let key_summary = effective_key_summary(profile, token.trim());
     let effective_model = effective_model(profile);
     let probe_prompt = select_probe_prompt(profile);
     config_error_event(
         profile,
         started_at,
         effective_model.as_deref(),
+        key_summary,
         &probe_prompt,
         "claude_not_found",
         message,
@@ -55,6 +64,8 @@ pub fn claude_not_found_event(profile: &Profile, message: &str) -> ProbeEvent {
 async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
     let started_at = Local::now();
     let token = profile.token.clone().unwrap_or_default();
+    let token = token.trim();
+    let key_summary = effective_key_summary(profile, token);
     let effective_model = effective_model(profile);
     let probe_prompt = select_probe_prompt(profile);
     app_log::info(
@@ -66,44 +77,62 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
         ),
     );
 
-    if !token.trim().is_empty() && !is_supported_token_kind(&profile.token_kind) {
+    if !token.is_empty() && !is_supported_token_kind(&profile.token_kind) {
         return config_error_event(
             profile,
             started_at,
             effective_model.as_deref(),
+            key_summary,
             &probe_prompt,
             "invalid_token_kind",
             "token kind must be ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY",
         );
     }
 
-    let mut child =
-        match build_command(profile, binary, token.trim(), effective_model.as_deref()).spawn() {
-            Ok(child) => child,
-            Err(err) => {
-                app_log::error("run_probe.spawn", err.to_string());
-                let ended_at = Local::now();
-                let (prompt_summary, prompt_truncated) = prompt_summary(&probe_prompt);
-                return ProbeEvent {
-                    id: Uuid::new_v4().to_string(),
-                    profile_id: profile.id.clone(),
-                    started_at,
-                    ended_at,
-                    duration_ms: (ended_at - started_at).num_milliseconds(),
-                    status: ProbeStatus::ConfigError,
-                    error_kind: Some("claude_not_found".to_string()),
-                    exit_code: None,
-                    base_url: profile.base_url.clone(),
-                    model: event_model(effective_model.as_deref()),
-                    prompt_summary,
-                    prompt_truncated,
-                    stdout_summary: None,
-                    stderr_summary: Some(err.to_string()),
-                    stdout_truncated: false,
-                    stderr_truncated: false,
-                };
-            }
-        };
+    let mut probe_command = match build_command(profile, binary, token, effective_model.as_deref())
+    {
+        Ok(command) => command,
+        Err(err) => {
+            app_log::error("run_probe.build_command", err.to_string());
+            return config_error_event(
+                profile,
+                started_at,
+                effective_model.as_deref(),
+                key_summary,
+                &probe_prompt,
+                "mcp_config_error",
+                &err.to_string(),
+            );
+        }
+    };
+
+    let mut child = match probe_command.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            app_log::error("run_probe.spawn", err.to_string());
+            let ended_at = Local::now();
+            let (prompt_summary, prompt_truncated) = prompt_summary(&probe_prompt);
+            return ProbeEvent {
+                id: Uuid::new_v4().to_string(),
+                profile_id: profile.id.clone(),
+                started_at,
+                ended_at,
+                duration_ms: (ended_at - started_at).num_milliseconds(),
+                status: ProbeStatus::ConfigError,
+                error_kind: Some("claude_not_found".to_string()),
+                exit_code: None,
+                base_url: profile.base_url.clone(),
+                model: event_model(effective_model.as_deref()),
+                key_summary,
+                prompt_summary,
+                prompt_truncated,
+                stdout_summary: None,
+                stderr_summary: Some(err.to_string()),
+                stdout_truncated: false,
+                stderr_truncated: false,
+            };
+        }
+    };
 
     if let Some(mut stdin) = child.stdin.take() {
         let prompt = probe_prompt.clone();
@@ -125,6 +154,7 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
                 exit_code: output.exit_code,
                 timed_out: output.timed_out,
                 effective_model: effective_model.as_deref(),
+                key_summary,
                 prompt: &probe_prompt,
                 stdout: &output.stdout,
                 stderr: &output.stderr,
@@ -140,6 +170,7 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
                     exit_code: None,
                     timed_out: false,
                     effective_model: effective_model.as_deref(),
+                    key_summary,
                     prompt: &probe_prompt,
                     stdout: b"",
                     stderr: stderr.as_bytes(),
@@ -269,16 +300,17 @@ fn build_command(
     binary: &str,
     token: &str,
     effective_model: Option<&str>,
-) -> Command {
+) -> io::Result<ProbeCommand> {
     let mut command = Command::new(binary);
     apply_claude_command_path(&mut command, binary);
+    let mut temp_files = Vec::new();
     command
         .arg("-p")
         .arg("--safe-mode")
         .arg("--disable-slash-commands")
-        .arg("--strict-mcp-config")
-        .arg("--mcp-config")
-        .arg(r#"{"mcpServers":{}}"#)
+        .arg("--strict-mcp-config");
+    add_empty_mcp_config_arg(&mut command, &mut temp_files)?;
+    command
         .arg("--no-session-persistence")
         .arg("--tools")
         .arg("")
@@ -303,7 +335,54 @@ fn build_command(
         command.env(&profile.token_kind, token);
     }
 
-    command
+    Ok(ProbeCommand {
+        command,
+        temp_files,
+    })
+}
+
+struct ProbeCommand {
+    command: Command,
+    temp_files: Vec<PathBuf>,
+}
+
+impl ProbeCommand {
+    fn spawn(&mut self) -> io::Result<Child> {
+        self.command.spawn()
+    }
+}
+
+impl Drop for ProbeCommand {
+    fn drop(&mut self) {
+        for path in &self.temp_files {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
+fn add_empty_mcp_config_arg(
+    command: &mut Command,
+    temp_files: &mut Vec<PathBuf>,
+) -> io::Result<()> {
+    command.arg("--mcp-config");
+
+    #[cfg(windows)]
+    {
+        let path = std::env::temp_dir().join(format!(
+            "anyrouter-keeper-empty-mcp-{}.json",
+            Uuid::new_v4()
+        ));
+        fs::write(&path, EMPTY_MCP_CONFIG)?;
+        command.arg(&path);
+        temp_files.push(path);
+    }
+
+    #[cfg(not(windows))]
+    {
+        command.arg(std::str::from_utf8(EMPTY_MCP_CONFIG).expect("static JSON is UTF-8"));
+    }
+
+    Ok(())
 }
 
 fn is_supported_token_kind(value: &str) -> bool {
@@ -343,6 +422,10 @@ fn event_model(effective_model: Option<&str>) -> String {
     effective_model.unwrap_or("default").to_string()
 }
 
+fn effective_key_summary(profile: &Profile, token: &str) -> Option<String> {
+    summarize_configured_key(&profile.token_kind, token).or_else(detect_claude_key_summary)
+}
+
 fn prompt_summary(prompt: &str) -> (Option<String>, bool) {
     summarize_and_redact(prompt.as_bytes(), MAX_PROMPT_SUMMARY_BYTES)
 }
@@ -371,6 +454,7 @@ fn config_error_event(
     profile: &Profile,
     started_at: chrono::DateTime<Local>,
     effective_model: Option<&str>,
+    key_summary: Option<String>,
     prompt: &str,
     kind: &str,
     message: &str,
@@ -388,6 +472,7 @@ fn config_error_event(
         exit_code: None,
         base_url: profile.base_url.clone(),
         model: event_model(effective_model),
+        key_summary,
         prompt_summary,
         prompt_truncated,
         stdout_summary: None,
@@ -401,6 +486,7 @@ struct OutputCapture<'a> {
     exit_code: Option<i32>,
     timed_out: bool,
     effective_model: Option<&'a str>,
+    key_summary: Option<String>,
     prompt: &'a str,
     stdout: &'a [u8],
     stderr: &'a [u8],
@@ -437,6 +523,7 @@ fn event_from_output(
         exit_code: capture.exit_code,
         base_url: profile.base_url.clone(),
         model: event_model(capture.effective_model),
+        key_summary: capture.key_summary,
         prompt_summary,
         prompt_truncated,
         stdout_summary,

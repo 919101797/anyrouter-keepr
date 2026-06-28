@@ -48,6 +48,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::claude::get_claude_installation,
+            commands::claude::get_claude_key_value,
             commands::claude::get_claude_runtime_config,
             commands::claude::refresh_claude_installation,
             commands::claude::list_claude_detection_logs,

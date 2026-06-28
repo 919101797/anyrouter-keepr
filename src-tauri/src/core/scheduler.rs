@@ -404,6 +404,7 @@ mod tests {
                 exit_code: None,
                 base_url: String::new(),
                 model: "claude-opus-4-8[1M]".to_string(),
+                key_summary: None,
                 prompt_summary: None,
                 prompt_truncated: false,
                 stdout_summary: None,

@@ -34,9 +34,59 @@ pub fn detect_claude_runtime_config() -> ClaudeRuntimeConfig {
     }
 }
 
+pub fn summarize_configured_key(token_kind: &str, token: &str) -> Option<String> {
+    clean_value(token).map(|value| {
+        format_secret_candidate(&SecretCandidate {
+            value,
+            kind: token_kind.trim().to_string(),
+            source: "profile_override".to_string(),
+        })
+    })
+}
+
+pub fn detect_claude_key_summary() -> Option<String> {
+    detect_claude_key_candidates()
+        .into_iter()
+        .next()
+        .map(|candidate| format_secret_candidate(&candidate))
+}
+
+pub fn resolve_claude_key_value(
+    key_summary: Option<&str>,
+    token_kind: &str,
+    token: &str,
+) -> Option<String> {
+    let expected = key_summary.and_then(clean_value);
+    let mut candidates = Vec::new();
+    if let Some(value) = clean_value(token) {
+        candidates.push(SecretCandidate {
+            value,
+            kind: token_kind.trim().to_string(),
+            source: "profile_override".to_string(),
+        });
+    }
+    candidates.extend(detect_claude_key_candidates());
+
+    candidates
+        .into_iter()
+        .find(|candidate| {
+            expected
+                .as_deref()
+                .is_none_or(|summary| format_secret_candidate(candidate) == summary)
+        })
+        .map(|candidate| candidate.value)
+}
+
 #[derive(Debug, Clone)]
 struct Candidate {
     value: String,
+    source: String,
+}
+
+#[derive(Debug, Clone)]
+struct SecretCandidate {
+    value: String,
+    kind: String,
     source: String,
 }
 
@@ -67,6 +117,29 @@ fn model_env_keys() -> &'static [&'static str] {
 
 fn effort_env_keys() -> &'static [&'static str] {
     &["CLAUDE_CODE_EFFORT", "CLAUDE_EFFORT", "ANTHROPIC_EFFORT"]
+}
+
+fn token_env_keys() -> &'static [&'static str] {
+    &[
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_API_KEY",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+    ]
+}
+
+fn token_config_keys() -> &'static [&'static str] {
+    &[
+        "anthropicauthtoken",
+        "anthropic_auth_token",
+        "anthropicapikey",
+        "anthropic_api_key",
+        "claudecodeoauthtoken",
+        "claude_code_oauth_token",
+        "apikey",
+        "api_key",
+        "authtoken",
+        "auth_token",
+    ]
 }
 
 fn model_keys() -> &'static [&'static str] {
@@ -110,6 +183,36 @@ fn detect_env_value(keys: &[&str], source_prefix: &str) -> Option<Candidate> {
     None
 }
 
+fn detect_env_secret() -> Option<SecretCandidate> {
+    for key in token_env_keys() {
+        if let Ok(value) = env::var(key) {
+            if let Some(value) = clean_value(&value) {
+                return Some(SecretCandidate {
+                    value,
+                    kind: (*key).to_string(),
+                    source: "environment".to_string(),
+                });
+            }
+        }
+    }
+    None
+}
+
+fn detect_claude_key_candidates() -> Vec<SecretCandidate> {
+    let mut errors = Vec::new();
+    let mut candidates = Vec::new();
+    if let Some(candidate) = detect_env_secret() {
+        candidates.push(candidate);
+    }
+    if let Some(candidate) = detect_claude_settings_secret(&mut errors) {
+        candidates.push(candidate);
+    }
+    if let Some(candidate) = detect_cc_switch_secret(&mut errors) {
+        candidates.push(candidate);
+    }
+    candidates
+}
+
 fn detect_claude_settings(keys: &[&str], errors: &mut Vec<String>) -> Option<Candidate> {
     for path in claude_settings_paths() {
         let Some(value) = read_json(&path, errors) else {
@@ -118,6 +221,22 @@ fn detect_claude_settings(keys: &[&str], errors: &mut Vec<String>) -> Option<Can
         if let Some(found) = find_value_by_keys(&value, keys) {
             return Some(Candidate {
                 value: found,
+                source: format!("claude_settings:{}", display_path(&path)),
+            });
+        }
+    }
+    None
+}
+
+fn detect_claude_settings_secret(errors: &mut Vec<String>) -> Option<SecretCandidate> {
+    for path in claude_settings_paths() {
+        let Some(value) = read_json(&path, errors) else {
+            continue;
+        };
+        if let Some((kind, found)) = find_value_by_keys_with_key(&value, token_config_keys()) {
+            return Some(SecretCandidate {
+                value: found,
+                kind,
                 source: format!("claude_settings:{}", display_path(&path)),
             });
         }
@@ -158,6 +277,27 @@ fn detect_cc_switch_value(
     find_value_by_keys(&settings_config, keys).map(|value| Candidate {
         value,
         source: format!("cc_switch:{value_kind}:{}", row.name),
+    })
+}
+
+fn detect_cc_switch_secret(errors: &mut Vec<String>) -> Option<SecretCandidate> {
+    let current_provider = current_cc_switch_provider_id(errors);
+    let conn = open_cc_switch_db(errors)?;
+    let row = query_current_cc_switch_provider(&conn, current_provider.as_deref(), errors)?;
+    let settings_config = match serde_json::from_str::<Value>(&row.settings_config) {
+        Ok(value) => value,
+        Err(err) => {
+            errors.push(format!("cc-switch provider config: {err}"));
+            return None;
+        }
+    };
+
+    find_value_by_keys_with_key(&settings_config, token_config_keys()).map(|(kind, value)| {
+        SecretCandidate {
+            value,
+            kind,
+            source: format!("cc_switch:{}", row.name),
+        }
     })
 }
 
@@ -360,6 +500,11 @@ fn find_value_by_keys(value: &Value, keys: &[&str]) -> Option<String> {
     find_value_by_keys_inner(value, &key_set)
 }
 
+fn find_value_by_keys_with_key(value: &Value, keys: &[&str]) -> Option<(String, String)> {
+    let key_set = keys.iter().copied().collect::<HashSet<_>>();
+    find_value_by_keys_with_key_inner(value, &key_set)
+}
+
 fn find_value_by_keys_inner(value: &Value, keys: &HashSet<&str>) -> Option<String> {
     match value {
         Value::Object(map) => {
@@ -381,6 +526,34 @@ fn find_value_by_keys_inner(value: &Value, keys: &HashSet<&str>) -> Option<Strin
         Value::Array(items) => items
             .iter()
             .find_map(|item| find_value_by_keys_inner(item, keys)),
+        _ => None,
+    }
+}
+
+fn find_value_by_keys_with_key_inner(
+    value: &Value,
+    keys: &HashSet<&str>,
+) -> Option<(String, String)> {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                let normalized = normalize_key(key);
+                if keys.contains(normalized.as_str()) {
+                    if let Some(value) = value_to_clean_string(child) {
+                        return Some((key.to_string(), value));
+                    }
+                }
+            }
+            for child in map.values() {
+                if let Some(value) = find_value_by_keys_with_key_inner(child, keys) {
+                    return Some(value);
+                }
+            }
+            None
+        }
+        Value::Array(items) => items
+            .iter()
+            .find_map(|item| find_value_by_keys_with_key_inner(item, keys)),
         _ => None,
     }
 }
@@ -423,6 +596,45 @@ fn clean_value(value: &str) -> Option<String> {
     } else {
         Some(value.to_string())
     }
+}
+
+fn format_secret_candidate(candidate: &SecretCandidate) -> String {
+    format!(
+        "{} · {} · {}",
+        candidate.source,
+        candidate.kind,
+        secret_fingerprint(&candidate.value)
+    )
+}
+
+fn secret_fingerprint(value: &str) -> String {
+    let value = value.trim();
+    let chars = value.chars().collect::<Vec<_>>();
+    if chars.is_empty() {
+        return "empty".to_string();
+    }
+
+    let lower = value.to_ascii_lowercase();
+    let prefix_len = if lower.starts_with("sk-ant-") {
+        7
+    } else if lower.starts_with("sk-") {
+        3
+    } else {
+        4
+    }
+    .min(chars.len());
+    let suffix_len = 6.min(chars.len().saturating_sub(prefix_len));
+
+    if chars.len() <= prefix_len + suffix_len {
+        return "*".repeat(chars.len().clamp(4, 8));
+    }
+
+    let prefix = chars.iter().take(prefix_len).collect::<String>();
+    let suffix = chars
+        .iter()
+        .skip(chars.len() - suffix_len)
+        .collect::<String>();
+    format!("{prefix}...{suffix}")
 }
 
 fn read_json(path: &Path, errors: &mut Vec<String>) -> Option<Value> {
@@ -481,6 +693,33 @@ mod tests {
         let normalized = normalize_effort_candidate(candidate).unwrap();
 
         assert_eq!(normalized.value, "high");
+    }
+
+    #[test]
+    fn summarizes_key_without_exposing_secret() {
+        let summary =
+            summarize_configured_key("ANTHROPIC_AUTH_TOKEN", "sk-ant-abcdefghijklmnopqrstuvwxyz")
+                .unwrap();
+
+        assert!(summary.contains("profile_override"));
+        assert!(summary.contains("ANTHROPIC_AUTH_TOKEN"));
+        assert!(summary.contains("sk-ant-...uvwxyz"));
+        assert!(!summary.contains("abcdefghijklmnopqrstuvwxyz"));
+    }
+
+    #[test]
+    fn resolves_configured_key_by_summary() {
+        let key = "sk-ant-abcdefghijklmnopqrstuvwxyz";
+        let summary = summarize_configured_key("ANTHROPIC_AUTH_TOKEN", key).unwrap();
+
+        assert_eq!(
+            resolve_claude_key_value(Some(&summary), "ANTHROPIC_AUTH_TOKEN", key).as_deref(),
+            Some(key)
+        );
+        assert_eq!(
+            resolve_claude_key_value(Some("other"), "ANTHROPIC_AUTH_TOKEN", key),
+            None
+        );
     }
 
     #[test]
