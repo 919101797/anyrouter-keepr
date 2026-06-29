@@ -58,12 +58,10 @@ describe("updater progress reducer", () => {
     expect(formatBytes(2 * 1024 * 1024)).toBe("2.0 MB");
   });
 
-  it("explains inaccessible Cloudflare updater metadata", () => {
+  it("normalizes inaccessible update metadata", () => {
     const message = normalizeUpdaterError(new Error("Could not fetch a valid release JSON from the remote"));
 
-    expect(message).toContain("latest.json");
-    expect(message).toContain("匿名下载");
-    expect(message).toContain("release tag");
+    expect(message).toBe("暂时无法获取更新信息，请检查网络后稍后重试。");
   });
 
   it("keeps unrelated updater errors intact", () => {

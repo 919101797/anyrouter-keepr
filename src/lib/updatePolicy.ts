@@ -1,6 +1,6 @@
 const UPDATE_REMINDER_PREFIX = "anyrouter-keeper:update-reminder:";
 
-export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const UPDATE_CHECK_INTERVAL_MS = 60 * 1000;
 export const UPDATE_STARTUP_DELAY_MS = 6 * 1000;
 export const UPDATE_REMIND_LATER_MS = 12 * 60 * 60 * 1000;
 

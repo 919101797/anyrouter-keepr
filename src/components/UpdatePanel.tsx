@@ -91,7 +91,7 @@ export function UpdatePanel({ updater }: { updater: AppUpdaterController }) {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--app-text-soft)]">
-                GitHub Release
+                应用更新
               </p>
               <h2
                 id="update-panel-title"
@@ -223,17 +223,16 @@ function panelTitle(updater: AppUpdaterController) {
 }
 
 function panelCopy(updater: AppUpdaterController) {
-  if (updater.state === "checking") return "正在从 Cloudflare Pages 拉取 updater 元数据。";
+  if (updater.state === "checking") return "正在检查是否有可用的新版本。";
   if (updater.state === "available" && updater.update) {
-    return `可以从 ${updater.update.currentVersion} 更新到 ${updater.update.version}，下载包会先经过 Tauri 签名校验再安装。`;
+    return `可以从 ${updater.update.currentVersion} 更新到 ${updater.update.version}，下载完成后会自动安装。`;
   }
   if (updater.state === "downloading") return "下载进度会根据真实字节数刷新，完成后自动进入安装步骤。";
-  if (updater.state === "installing")
-    return "安装器正在写入新版本，请保持应用运行。Windows 可能会自动退出完成安装。";
+  if (updater.state === "installing") return "正在写入新版本，请保持应用运行。完成后按提示重启即可生效。";
   if (updater.state === "installed") return "更新包已完成安装，重启应用后新版本会生效。";
-  if (updater.state === "latest") return "没有发现比当前版本更新的 Cloudflare 更新源。";
-  if (updater.state === "error") return "可能是网络、Cloudflare 更新元数据或签名配置还没准备好。";
-  return "应用会在后台定期检查 Cloudflare 更新源是否发布了新版本。";
+  if (updater.state === "latest") return "没有发现比当前版本更新的应用版本。";
+  if (updater.state === "error") return "可能是网络暂时不可用，请稍后再试。";
+  return "应用会在后台定期检查是否发布了新版本。";
 }
 
 function progressLabel(updater: AppUpdaterController) {

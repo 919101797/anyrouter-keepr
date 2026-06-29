@@ -14,6 +14,8 @@ use tokio::time::timeout;
 use crate::core::types::ClaudeInstallation;
 
 const VERSION_TIMEOUT_SECONDS: u64 = 5;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 #[cfg(unix)]
 const SHELL_LOOKUP_TIMEOUT_SECONDS: u64 = 4;
 const SUMMARY_LIMIT: usize = 300;
@@ -126,7 +128,7 @@ async fn installation_from_version_probe(
 
 async fn read_claude_version(binary: &str) -> Result<String, String> {
     let mut command = Command::new(binary);
-    apply_claude_command_path(&mut command, binary);
+    apply_claude_command_options(&mut command, binary);
     let child = command
         .arg("--version")
         .stdin(Stdio::null())
@@ -167,6 +169,19 @@ async fn read_claude_version(binary: &str) -> Result<String, String> {
 pub fn apply_claude_command_path(command: &mut Command, binary: &str) {
     command.env("PATH", command_path(binary));
 }
+
+pub fn apply_claude_command_options(command: &mut Command, binary: &str) {
+    apply_claude_command_path(command, binary);
+    hide_windows_console(command);
+}
+
+#[cfg(windows)]
+fn hide_windows_console(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_windows_console(_command: &mut Command) {}
 
 fn command_path(binary: &str) -> OsString {
     let mut seen = HashSet::<OsString>::new();

@@ -12,7 +12,7 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::core::classifier::classify;
-use crate::core::claude_installation::{apply_claude_command_path, resolve_claude_binary};
+use crate::core::claude_installation::{apply_claude_command_options, resolve_claude_binary};
 use crate::core::claude_runtime_config::{
     detect_claude_key_summary, detect_claude_runtime_config, summarize_configured_key,
 };
@@ -302,7 +302,7 @@ fn build_command(
     effective_model: Option<&str>,
 ) -> io::Result<ProbeCommand> {
     let mut command = Command::new(binary);
-    apply_claude_command_path(&mut command, binary);
+    apply_claude_command_options(&mut command, binary);
     let mut temp_files = Vec::new();
     command
         .arg("-p")

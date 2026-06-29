@@ -136,7 +136,7 @@ export function normalizeUpdaterError(error: unknown) {
   const compactMessage = message.trim();
 
   if (isReleaseMetadataError(compactMessage)) {
-    return "无法读取 Cloudflare Pages 更新元数据。请确认 latest.json 和安装包资产已经随 release tag 发布，并且可以匿名下载。";
+    return "暂时无法获取更新信息，请检查网络后稍后重试。";
   }
 
   return compactMessage || "更新失败，请稍后重试。";
