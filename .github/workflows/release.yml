@@ -72,24 +72,14 @@ jobs:
             platform: windows-latest
             args: "--bundles nsis,msi"
             rust-targets: ""
-          - label: "Linux x64"
-            platform: ubuntu-22.04
-            args: "--bundles appimage,deb"
-            rust-targets: ""
+          - label: "Windows ARM64"
+            platform: windows-latest
+            args: "--target aarch64-pc-windows-msvc --bundles nsis,msi"
+            rust-targets: "aarch64-pc-windows-msvc"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Linux Tauri dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -312,7 +302,7 @@ jobs:
           const requiredPlatforms = [
             "darwin-aarch64",
             "darwin-x86_64",
-            "linux-x86_64",
+            "windows-aarch64",
             "windows-x86_64",
           ];
           const missing = requiredPlatforms.filter((platform) => !platforms[platform]);

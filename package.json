@@ -1,7 +1,7 @@
 {
   "name": "anyrouter-claude-keeper",
   "private": true,
-  "version": "0.2.6",
+  "version": "0.2.7",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
