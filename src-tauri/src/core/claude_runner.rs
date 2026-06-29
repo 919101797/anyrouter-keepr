@@ -316,6 +316,7 @@ fn build_command(
         .arg("")
         .arg("--output-format")
         .arg("stream-json")
+        .arg("--verbose")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -751,6 +752,8 @@ printf '{"result":"OK"}'
         assert!(args.contains("--disable-slash-commands"));
         assert!(args.contains("--strict-mcp-config"));
         assert!(args.contains("--mcp-config\n{\"mcpServers\":{}}"));
+        assert!(args.contains("--output-format\nstream-json"));
+        assert!(args.contains("--verbose"));
     }
 
     #[cfg(unix)]
