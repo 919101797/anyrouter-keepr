@@ -1,10 +1,12 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use chrono::Local;
 
 const LOG_FILE: &str = "keeper.log";
+static LOG_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub fn info(scope: &str, message: impl AsRef<str>) {
     write("INFO", scope, message.as_ref());
@@ -19,6 +21,7 @@ pub fn path() -> PathBuf {
 }
 
 fn write(level: &str, scope: &str, message: &str) {
+    let _guard = LOG_MUTEX.get_or_init(|| Mutex::new(())).lock().ok();
     let path = path();
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);

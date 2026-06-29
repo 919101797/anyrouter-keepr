@@ -19,6 +19,10 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    std::panic::set_hook(Box::new(|info| {
+        system::app_log::error("panic", info.to_string());
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
@@ -78,6 +82,10 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                system::app_log::info(
+                    "window.close_requested",
+                    format!("label={} action=hide_to_background", window.label()),
+                );
                 if let Some(state) = window.try_state::<AppState>() {
                     let db = state.db.clone();
                     tauri::async_runtime::spawn(async move {

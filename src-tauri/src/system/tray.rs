@@ -2,6 +2,7 @@ use tauri::menu::MenuBuilder;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, Manager};
 
+use crate::system::app_log;
 use crate::AppState;
 
 pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
@@ -20,12 +21,15 @@ pub fn setup_tray(app: &mut App) -> tauri::Result<()> {
         .tooltip("AnyRouter Keeper")
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => {
+                app_log::info("tray.show", "requested");
                 crate::system::window::show_main_window(app);
             }
             "quit" => {
+                app_log::info("tray.quit", "requested");
                 if let Some(state) = app.try_state::<AppState>() {
                     let _ = state.db.flush_buffer();
                 }
+                app_log::info("tray.quit", "exiting");
                 app.exit(0);
             }
             _ => {}
