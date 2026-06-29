@@ -18,6 +18,7 @@ import {
 } from "../lib/promptTags";
 import { DEFAULT_END_TIME, DEFAULT_START_TIME, isAllDayWindow } from "../lib/timeWindow";
 import { formatClock } from "../lib/utils";
+import { getClaudePathActionView, type StatusPendingAction } from "../lib/statusActions";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -38,9 +39,11 @@ interface SettingsPanelProps {
   claudeRuntimeConfig: ClaudeRuntimeConfig | null;
   claudeDetectionLogs: ClaudeDetectionLog[];
   busy: boolean;
+  pendingAction?: StatusPendingAction;
   autostartEnabled: boolean;
   onSave: (profile: ProfileInput) => void;
   onRefreshClaudeInstallation: () => void;
+  onTestClaudeInstallation: (configuredPath: string) => void;
   onAutostartChange: (enabled: boolean) => void;
 }
 
@@ -50,9 +53,11 @@ export function SettingsPanel({
   claudeRuntimeConfig,
   claudeDetectionLogs,
   busy,
+  pendingAction = null,
   autostartEnabled,
   onSave,
   onRefreshClaudeInstallation,
+  onTestClaudeInstallation,
   onAutostartChange,
 }: SettingsPanelProps) {
   const initial = useMemo<ProfileInput>(
@@ -100,6 +105,8 @@ export function SettingsPanel({
   const promptTags = normalizePromptTags(draft.prompt_pool);
   const promptPoolCount = promptTags.length;
   const [newPromptTag, setNewPromptTag] = useState("");
+  const claudeRefreshing = pendingAction === "claude";
+  const claudePathAction = getClaudePathActionView(pendingAction);
   const allDayWindow = isAllDayWindow(draft.start_time, draft.end_time);
   const [customWindowDraft, setCustomWindowDraft] = useState(() =>
     isAllDayWindow(initial.start_time, initial.end_time)
@@ -186,7 +193,7 @@ export function SettingsPanel({
                 size="sm"
                 className="shrink-0"
               >
-                <RefreshCw className={busy ? "animate-spin" : ""} />
+                <RefreshCw className={claudeRefreshing ? "animate-spin" : ""} />
                 刷新
               </Button>
             </div>
@@ -204,11 +211,34 @@ export function SettingsPanel({
             </div>
 
             <Field label="Claude 可执行文件路径">
-              <Input
-                value={draft.claude_binary_path}
-                placeholder="留空自动检测，或填 command -v claude 输出的绝对路径"
-                onChange={(event) => update("claude_binary_path", event.target.value)}
-              />
+              <div className="claude-path-editor">
+                <Input
+                  value={draft.claude_binary_path}
+                  placeholder="留空自动检测，或填 /usr/local/bin、/opt/homebrew/bin/claude"
+                  onChange={(event) => update("claude_binary_path", event.target.value)}
+                />
+                <div className="claude-path-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onTestClaudeInstallation(draft.claude_binary_path)}
+                    disabled={claudePathAction.identifyDisabled || busy}
+                    className="claude-path-action"
+                  >
+                    <RefreshCw className={claudePathAction.identifyPending ? "animate-spin" : ""} />
+                    {claudePathAction.identifyLabel}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => onSave(draft)}
+                    disabled={claudePathAction.saveDisabled || busy}
+                    className="claude-path-action claude-path-save"
+                  >
+                    {claudePathAction.savePending ? <RefreshCw className="animate-spin" /> : <Save />}
+                    {claudePathAction.saveLabel}
+                  </Button>
+                </div>
+              </div>
             </Field>
 
             {claudeInstallation?.error ? (

@@ -47,12 +47,14 @@ export default function App() {
     autostartEnabled,
     loading,
     busy,
+    pendingAction,
     error,
     filter,
     load,
     refreshStatus,
     saveProfile,
     refreshClaudeInstallation,
+    testClaudeInstallation,
     runProbeNow,
     startScheduler,
     pauseScheduler,
@@ -119,6 +121,7 @@ export default function App() {
                 claudeRuntimeConfig={claudeRuntimeConfig}
                 status={status}
                 busy={busy || loading}
+                pendingAction={pendingAction}
                 onStart={startScheduler}
                 onPause={pauseScheduler}
                 onProbe={runProbeNow}
@@ -143,9 +146,11 @@ export default function App() {
                     claudeRuntimeConfig={claudeRuntimeConfig}
                     claudeDetectionLogs={claudeDetectionLogs}
                     busy={busy || loading}
+                    pendingAction={pendingAction}
                     autostartEnabled={autostartEnabled}
                     onSave={saveProfile}
                     onRefreshClaudeInstallation={refreshClaudeInstallation}
+                    onTestClaudeInstallation={testClaudeInstallation}
                     onAutostartChange={setAutostart}
                   />
                 </TabsContent>

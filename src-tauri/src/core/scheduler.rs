@@ -161,7 +161,12 @@ impl SchedulerHandle {
                     status.next_probe_at = None;
                 });
 
-                let event = run_probe(&profile).await;
+                let event = tokio::select! {
+                    event = run_probe(&profile) => event,
+                    _ = &mut rx => {
+                        break "stop_signal".to_string();
+                    },
+                };
                 app_log::info(
                     "scheduler.probe",
                     format!(
@@ -403,6 +408,56 @@ mod tests {
         }));
 
         scheduler.pause().await.expect("pause scheduler");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn pause_returns_promptly_while_probe_is_running() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use tokio::time::timeout;
+
+        let dir = tempdir().expect("temp dir");
+        let claude_path = dir.path().join("sleeping-claude");
+        fs::write(&claude_path, "#!/bin/sh\nsleep 30\n").expect("write fake claude");
+        let mut permissions = fs::metadata(&claude_path)
+            .expect("fake claude metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&claude_path, permissions).expect("mark fake claude executable");
+
+        let db = Arc::new(Database::open(dir.path().join("scheduler.sqlite3")).expect("open db"));
+        db.migrate().expect("migrate db");
+        db.save_profile(Profile {
+            claude_binary_path: claude_path.to_string_lossy().into_owned(),
+            token: None,
+            timeout_seconds: 30,
+            start_time: "00:00".to_string(),
+            end_time: "24:00".to_string(),
+            ..Profile::default()
+        })
+        .expect("save profile");
+
+        let mut scheduler = SchedulerHandle::new(db);
+        scheduler.start().await.expect("start scheduler");
+        for _ in 0..50 {
+            if scheduler.runtime_status().current_state == "probing" {
+                break;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(scheduler.runtime_status().current_state, "probing");
+
+        let result = timeout(Duration::from_millis(500), scheduler.pause()).await;
+
+        assert!(
+            result.is_ok(),
+            "pause should not wait for the active probe timeout"
+        );
+        result.expect("pause returned").expect("pause ok");
+        let status = scheduler.runtime_status();
+        assert!(!status.running);
+        assert_eq!(status.current_state, "paused");
     }
 
     #[tokio::test]

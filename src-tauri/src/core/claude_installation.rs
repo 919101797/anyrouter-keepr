@@ -204,7 +204,7 @@ fn command_path(binary: &str) -> OsString {
 async fn resolve_configured_path(value: &str) -> Option<(PathBuf, String)> {
     let path = PathBuf::from(value);
     if path.is_absolute() || value.contains(path::MAIN_SEPARATOR) {
-        resolve_invocable_path(&path).map(|path| (path, "manual".to_string()))
+        resolve_manual_path(&path).map(|path| (path, "manual".to_string()))
     } else if let Some(path) = find_binary_in_path(value) {
         Some((path, "manual".to_string()))
     } else {
@@ -238,9 +238,17 @@ fn find_binary_in_dirs(binary_name: &str, dirs: Vec<PathBuf>) -> Option<PathBuf>
 fn resolve_configured_path_in_dirs(value: &str, dirs: Vec<PathBuf>) -> Option<PathBuf> {
     let path = PathBuf::from(value);
     if path.is_absolute() || value.contains(path::MAIN_SEPARATOR) {
-        resolve_invocable_path(&path)
+        resolve_manual_path(&path)
     } else {
         find_binary_in_dirs(value, dirs)
+    }
+}
+
+fn resolve_manual_path(path: &Path) -> Option<PathBuf> {
+    if path.is_dir() {
+        find_binary_in_dirs("claude", vec![path.to_path_buf()])
+    } else {
+        resolve_invocable_path(path)
     }
 }
 
@@ -678,7 +686,7 @@ impl ClaudeBinaryResolutionError {
     fn manual_invalid(configured_path: String) -> Self {
         Self {
             message: format!(
-                "手动配置的 Claude Code CLI 路径不存在或不可执行：{configured_path}。请填入 `command -v claude` 输出的绝对路径。"
+                "手动配置的 Claude Code CLI 路径不存在或不可执行：{configured_path}。请填入 `command -v claude` 输出的绝对路径，或填入包含 claude 可执行文件的目录。"
             ),
             is_manual: true,
         }
@@ -751,6 +759,28 @@ mod tests {
 
         assert_eq!(installation.status, "ready");
         assert_eq!(installation.source, "manual");
+        assert_eq!(
+            installation.version.as_deref(),
+            Some("2.1.170 (Claude Code)")
+        );
+    }
+
+    #[tokio::test]
+    async fn manual_directory_path_reports_version_from_claude_inside_directory() {
+        let dir = tempdir().unwrap();
+        let script = fake_claude_path(dir.path(), "claude");
+        write_fake_claude_version(&script);
+
+        let installation =
+            detect_claude_installation(&path_to_string(dir.path().to_path_buf())).await;
+
+        assert_eq!(installation.status, "ready");
+        assert_eq!(installation.source, "manual");
+        let expected_path = path_to_string(script);
+        assert_eq!(
+            installation.effective_path.as_deref(),
+            Some(expected_path.as_str())
+        );
         assert_eq!(
             installation.version.as_deref(),
             Some("2.1.170 (Claude Code)")

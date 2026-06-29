@@ -225,6 +225,43 @@ button > svg {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54);
 }
 
+.claude-path-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.claude-path-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.claude-path-action {
+  min-width: 132px;
+}
+
+.claude-path-save {
+  background: var(--app-accent) !important;
+  color: #121815 !important;
+  box-shadow: none !important;
+}
+
+.claude-path-save:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--app-accent) 84%, white) !important;
+}
+
+@media (max-width: 640px) {
+  .claude-path-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .claude-path-action {
+    width: 100%;
+  }
+}
+
 .status-hero {
   border-color: var(--hero-border);
   background:

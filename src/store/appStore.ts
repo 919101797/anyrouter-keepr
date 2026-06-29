@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
+import type { StatusPendingAction } from "../lib/statusActions";
 import type {
   ActivityBucket,
   AppStatus,
@@ -23,12 +24,14 @@ interface AppStore {
   autostartEnabled: boolean;
   loading: boolean;
   busy: boolean;
+  pendingAction: StatusPendingAction;
   error: string | null;
   filter: string;
   load: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   saveProfile: (profile: ProfileInput) => Promise<void>;
   refreshClaudeInstallation: () => Promise<void>;
+  testClaudeInstallation: (configuredPath: string) => Promise<void>;
   runProbeNow: () => Promise<void>;
   startScheduler: () => Promise<void>;
   pauseScheduler: () => Promise<void>;
@@ -71,6 +74,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   autostartEnabled: false,
   loading: false,
   busy: false,
+  pendingAction: null,
   error: null,
   filter: "all",
 
@@ -116,7 +120,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   async saveProfile(profile) {
-    set({ busy: true, error: null });
+    set({ busy: true, pendingAction: "profile", error: null });
     try {
       const saved = await api.saveProfile(profile);
       const [claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs] = await Promise.all([
@@ -124,69 +128,86 @@ export const useAppStore = create<AppStore>((set, get) => ({
         api.getClaudeRuntimeConfig(),
         api.listClaudeDetectionLogs(20),
       ]);
-      set({ profile: saved, claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, busy: false });
+      set({
+        profile: saved,
+        claudeInstallation,
+        claudeRuntimeConfig,
+        claudeDetectionLogs,
+        busy: false,
+        pendingAction: null,
+      });
       await get().refreshStatus();
     } catch (error) {
-      set({ error: String(error), busy: false });
+      set({ error: String(error), busy: false, pendingAction: null });
     }
   },
 
   async refreshClaudeInstallation() {
-    set({ busy: true, error: null });
+    set({ busy: true, pendingAction: "claude", error: null });
     try {
       const claudeInstallation = await api.refreshClaudeInstallation();
       const [claudeRuntimeConfig, claudeDetectionLogs] = await Promise.all([
         api.getClaudeRuntimeConfig(),
         api.listClaudeDetectionLogs(20),
       ]);
-      set({ claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, busy: false });
+      set({ claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, busy: false, pendingAction: null });
     } catch (error) {
-      set({ error: String(error), busy: false });
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async testClaudeInstallation(configuredPath) {
+    set({ busy: true, pendingAction: "claude_path_test", error: null });
+    try {
+      const claudeInstallation = await api.testClaudeInstallation(configuredPath);
+      set({ claudeInstallation, busy: false, pendingAction: null });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
     }
   },
 
   async runProbeNow() {
-    set({ busy: true, error: null });
+    set({ busy: true, pendingAction: "probe", error: null });
     try {
       await api.runProbeNow();
       const snapshot = await readFullSnapshot();
-      set({ ...snapshot, busy: false });
+      set({ ...snapshot, busy: false, pendingAction: null });
     } catch (error) {
       const message = String(error);
       try {
         const snapshot = await readFullSnapshot();
-        set({ ...snapshot, error: message, busy: false });
+        set({ ...snapshot, error: message, busy: false, pendingAction: null });
       } catch {
-        set({ error: message, busy: false });
+        set({ error: message, busy: false, pendingAction: null });
       }
     }
   },
 
   async startScheduler() {
-    set({ busy: true, error: null });
+    set({ busy: true, pendingAction: "start", error: null });
     try {
       await api.startScheduler();
       const snapshot = await readFullSnapshot();
-      set({ ...snapshot, busy: false });
+      set({ ...snapshot, busy: false, pendingAction: null });
     } catch (error) {
       const message = String(error);
       try {
         const snapshot = await readFullSnapshot();
-        set({ ...snapshot, error: message, busy: false });
+        set({ ...snapshot, error: message, busy: false, pendingAction: null });
       } catch {
-        set({ error: message, busy: false });
+        set({ error: message, busy: false, pendingAction: null });
       }
     }
   },
 
   async pauseScheduler() {
-    set({ busy: true, error: null });
+    set({ busy: true, pendingAction: "pause", error: null });
     try {
       await api.pauseScheduler();
-      set({ busy: false });
+      set({ busy: false, pendingAction: null });
       await get().refreshStatus();
     } catch (error) {
-      set({ error: String(error), busy: false });
+      set({ error: String(error), busy: false, pendingAction: null });
     }
   },
 
@@ -195,12 +216,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   async setAutostart(enabled) {
-    set({ busy: true, error: null });
+    set({ busy: true, pendingAction: "autostart", error: null });
     try {
       await api.setAutostart(enabled);
-      set({ autostartEnabled: enabled, busy: false });
+      set({ autostartEnabled: enabled, busy: false, pendingAction: null });
     } catch (error) {
-      set({ error: String(error), busy: false });
+      set({ error: String(error), busy: false, pendingAction: null });
     }
   },
 }));
