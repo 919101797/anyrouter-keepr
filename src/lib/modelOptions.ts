@@ -2,11 +2,6 @@ export const CURRENT_MODEL_VALUE = "__current_claude_code__";
 export const CUSTOM_MODEL_VALUE = "__custom_model__";
 
 export const CLAUDE_MODEL_OPTIONS = [
-  { value: "sonnet", label: "Sonnet 最新" },
-  { value: "opus", label: "Opus 最新" },
-  { value: "fable", label: "Fable 5" },
-  { value: "haiku", label: "Haiku 最新" },
-  { value: "opusplan", label: "Opus Plan" },
   { value: "claude-fable-5", label: "Claude Fable 5" },
   { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
@@ -42,9 +37,9 @@ export function runtimeModelSelectValue(
   if (configured) return modelSelectValue(configured);
 
   const detected = canonicalModelValue(detectedDefaultModel);
-  if (!detected) return CURRENT_MODEL_VALUE;
+  if (!detected) return CUSTOM_MODEL_VALUE;
 
-  return CLAUDE_MODEL_OPTIONS.some((option) => option.value === detected) ? detected : CURRENT_MODEL_VALUE;
+  return CLAUDE_MODEL_OPTIONS.some((option) => option.value === detected) ? detected : CUSTOM_MODEL_VALUE;
 }
 
 export function canonicalModelValue(model?: string | null) {
