@@ -4,10 +4,8 @@ import { CircleAlert, RefreshCw, Save, X } from "lucide-react";
 import {
   CLAUDE_MODEL_OPTIONS,
   CONTEXT_SIZE_OPTIONS,
-  CURRENT_MODEL_VALUE,
   CUSTOM_MODEL_VALUE,
   EFFORT_OPTIONS,
-  defaultModelLabel,
   modelDisplayName,
   modelSelectValue,
   runtimeModelSelectValue,
@@ -114,12 +112,6 @@ export function SettingsPanel({
   };
 
   const updateModelSelect = (value: string) => {
-    if (value === CURRENT_MODEL_VALUE) {
-      setCustomModelMode(false);
-      update("model", "");
-      return;
-    }
-
     if (value === CUSTOM_MODEL_VALUE) {
       setCustomModelMode(true);
       if (!customModelActive && draft.model.trim()) {
@@ -247,9 +239,6 @@ export function SettingsPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={CURRENT_MODEL_VALUE}>
-                      {defaultModelLabel(detectedDefaultModel)}
-                    </SelectItem>
                     {CLAUDE_MODEL_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {modelDisplayName(option.value)}

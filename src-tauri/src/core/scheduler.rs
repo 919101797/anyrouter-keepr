@@ -165,11 +165,12 @@ impl SchedulerHandle {
                 app_log::info(
                     "scheduler.probe",
                     format!(
-                        "status={} error={:?} duration_ms={} model={}",
+                        "status={} error={:?} duration_ms={} model={} stderr={}",
                         event.status.as_str(),
                         event.error_kind,
                         event.duration_ms,
-                        event.model
+                        event.model,
+                        app_log::compact(event.stderr_summary.as_deref())
                     ),
                 );
                 let event_state = match event.status {

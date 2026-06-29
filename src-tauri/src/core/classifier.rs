@@ -46,6 +46,11 @@ pub fn classify(
         || combined.contains("permission denied")
         || combined.contains("model not found")
         || combined.contains("settings")
+        || combined.contains("when using --print")
+        || combined.contains("requires --verbose")
+        || combined.contains("unknown option")
+        || combined.contains("unrecognized option")
+        || combined.contains("invalid option")
     {
         return config("auth_or_config");
     }
@@ -179,6 +184,19 @@ mod tests {
     fn treats_auth_as_config_error() {
         let result = classify(Some(1), false, "", "HTTP 401 unauthorized");
         assert_eq!(result.status, ProbeStatus::ConfigError);
+    }
+
+    #[test]
+    fn treats_claude_cli_usage_error_as_config_error() {
+        let result = classify(
+            Some(1),
+            false,
+            "",
+            "Error: When using --print, --output-format=stream-json requires --verbose",
+        );
+
+        assert_eq!(result.status, ProbeStatus::ConfigError);
+        assert_eq!(result.error_kind.as_deref(), Some("auth_or_config"));
     }
 
     #[test]

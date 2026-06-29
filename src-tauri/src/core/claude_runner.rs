@@ -12,7 +12,7 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::core::classifier::classify;
-use crate::core::claude_installation::{apply_claude_command_path, resolve_claude_binary};
+use crate::core::claude_installation::{apply_claude_command_options, resolve_claude_binary};
 use crate::core::claude_runtime_config::{
     detect_claude_key_summary, detect_claude_runtime_config, summarize_configured_key,
 };
@@ -89,17 +89,59 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
         );
     }
 
-    let mut probe_command = match build_command(profile, binary, token, effective_model.as_deref())
-    {
+    for mode in [
+        ProbeCommandMode::Hardened,
+        ProbeCommandMode::Compatible,
+        ProbeCommandMode::Legacy,
+    ] {
+        let event = run_probe_attempt(
+            profile,
+            binary,
+            token,
+            effective_model.as_deref(),
+            key_summary.clone(),
+            &probe_prompt,
+            mode,
+        )
+        .await;
+
+        if mode != ProbeCommandMode::Legacy && is_unsupported_claude_option_event(&event) {
+            app_log::error(
+                "run_probe.compat",
+                format!(
+                    "{mode:?} Claude Code args unsupported; retrying fallback args stderr={}",
+                    app_log::compact(event.stderr_summary.as_deref())
+                ),
+            );
+            continue;
+        }
+
+        return event;
+    }
+
+    unreachable!("probe command mode list is non-empty")
+}
+
+async fn run_probe_attempt(
+    profile: &Profile,
+    binary: &str,
+    token: &str,
+    effective_model: Option<&str>,
+    key_summary: Option<String>,
+    probe_prompt: &str,
+    mode: ProbeCommandMode,
+) -> ProbeEvent {
+    let started_at = Local::now();
+    let mut probe_command = match build_command(profile, binary, token, effective_model, mode) {
         Ok(command) => command,
         Err(err) => {
             app_log::error("run_probe.build_command", err.to_string());
             return config_error_event(
                 profile,
                 started_at,
-                effective_model.as_deref(),
+                effective_model,
                 key_summary,
-                &probe_prompt,
+                probe_prompt,
                 "mcp_config_error",
                 &err.to_string(),
             );
@@ -111,7 +153,7 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
         Err(err) => {
             app_log::error("run_probe.spawn", err.to_string());
             let ended_at = Local::now();
-            let (prompt_summary, prompt_truncated) = prompt_summary(&probe_prompt);
+            let (prompt_summary, prompt_truncated) = prompt_summary(probe_prompt);
             return ProbeEvent {
                 id: Uuid::new_v4().to_string(),
                 profile_id: profile.id.clone(),
@@ -122,7 +164,7 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
                 error_kind: Some("claude_not_found".to_string()),
                 exit_code: None,
                 base_url: profile.base_url.clone(),
-                model: event_model(effective_model.as_deref()),
+                model: event_model(effective_model),
                 key_summary,
                 prompt_summary,
                 prompt_truncated,
@@ -135,7 +177,7 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
     };
 
     if let Some(mut stdin) = child.stdin.take() {
-        let prompt = probe_prompt.clone();
+        let prompt = probe_prompt.to_string();
         tokio::spawn(async move {
             let _ = stdin.write_all(prompt.as_bytes()).await;
         });
@@ -153,9 +195,9 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
             OutputCapture {
                 exit_code: output.exit_code,
                 timed_out: output.timed_out,
-                effective_model: effective_model.as_deref(),
+                effective_model,
                 key_summary,
-                prompt: &probe_prompt,
+                prompt: probe_prompt,
                 stdout: &output.stdout,
                 stderr: &output.stderr,
             },
@@ -169,9 +211,9 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
                 OutputCapture {
                     exit_code: None,
                     timed_out: false,
-                    effective_model: effective_model.as_deref(),
+                    effective_model,
                     key_summary,
-                    prompt: &probe_prompt,
+                    prompt: probe_prompt,
                     stdout: b"",
                     stderr: stderr.as_bytes(),
                 },
@@ -185,6 +227,13 @@ struct ProbeOutput {
     timed_out: bool,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProbeCommandMode {
+    Hardened,
+    Compatible,
+    Legacy,
 }
 
 async fn collect_probe_output(
@@ -300,27 +349,37 @@ fn build_command(
     binary: &str,
     token: &str,
     effective_model: Option<&str>,
+    mode: ProbeCommandMode,
 ) -> io::Result<ProbeCommand> {
     let mut command = Command::new(binary);
-    apply_claude_command_path(&mut command, binary);
+    apply_claude_command_options(&mut command, binary);
     let mut temp_files = Vec::new();
+    command.arg("-p");
+    if mode == ProbeCommandMode::Hardened {
+        command
+            .arg("--safe-mode")
+            .arg("--disable-slash-commands")
+            .arg("--strict-mcp-config");
+        add_empty_mcp_config_arg(&mut command, &mut temp_files)?;
+    }
+    if mode != ProbeCommandMode::Legacy {
+        command
+            .arg("--output-format")
+            .arg("stream-json")
+            .arg("--verbose");
+    }
     command
-        .arg("-p")
-        .arg("--safe-mode")
-        .arg("--disable-slash-commands")
-        .arg("--strict-mcp-config");
-    add_empty_mcp_config_arg(&mut command, &mut temp_files)?;
-    command
-        .arg("--no-session-persistence")
-        .arg("--tools")
-        .arg("")
-        .arg("--output-format")
-        .arg("stream-json")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
         .env("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "1");
+    if mode == ProbeCommandMode::Hardened {
+        command
+            .arg("--no-session-persistence")
+            .arg("--tools")
+            .arg("");
+    }
 
     if let Some(model) = effective_model {
         command.arg("--model").arg(model);
@@ -483,6 +542,20 @@ fn config_error_event(
         stdout_truncated: false,
         stderr_truncated: false,
     }
+}
+
+fn is_unsupported_claude_option_event(event: &ProbeEvent) -> bool {
+    let text = format!(
+        "{}\n{}",
+        event.stdout_summary.as_deref().unwrap_or_default(),
+        event.stderr_summary.as_deref().unwrap_or_default()
+    )
+    .to_ascii_lowercase();
+
+    event.status == ProbeStatus::ConfigError
+        && (text.contains("unknown option")
+            || text.contains("unrecognized option")
+            || text.contains("invalid option"))
 }
 
 struct OutputCapture<'a> {
@@ -751,6 +824,68 @@ printf '{"result":"OK"}'
         assert!(args.contains("--disable-slash-commands"));
         assert!(args.contains("--strict-mcp-config"));
         assert!(args.contains("--mcp-config\n{\"mcpServers\":{}}"));
+        assert!(args.contains("--output-format\nstream-json"));
+        assert!(args.contains("--verbose"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn spawned_probe_retries_without_hardened_args_for_old_cli() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().expect("temp dir");
+        let capture_path = dir.path().join("claude-args.txt");
+        let script_path = dir.path().join("fake-old-claude");
+        std::fs::write(
+            &script_path,
+            r#"#!/bin/sh
+printf '%s\n' "---" >> "$ANYROUTER_KEEPER_CAPTURE_ARGS"
+printf '%s\n' "$@" >> "$ANYROUTER_KEEPER_CAPTURE_ARGS"
+for arg in "$@"; do
+  if [ "$arg" = "--safe-mode" ]; then
+    printf '%s\n' "error: unknown option '--safe-mode'" >&2
+    exit 1
+  fi
+done
+printf '{"result":"OK"}'
+"#,
+        )
+        .expect("write fake old claude");
+        let mut permissions = std::fs::metadata(&script_path)
+            .expect("metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&script_path, permissions).expect("chmod fake old claude");
+        std::env::set_var("ANYROUTER_KEEPER_CAPTURE_ARGS", &capture_path);
+
+        let profile = Profile {
+            token: None,
+            base_url: String::new(),
+            model: "gateway-model".to_string(),
+            ..Profile::default()
+        };
+
+        let event =
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+        let args = std::fs::read_to_string(&capture_path).expect("read captured args");
+        let attempts = args
+            .split("---\n")
+            .filter(|chunk| !chunk.is_empty())
+            .count();
+        let compatible_attempt = args
+            .split("---\n")
+            .filter(|chunk| !chunk.is_empty())
+            .next_back()
+            .expect("compatible attempt");
+
+        assert_eq!(event.status, ProbeStatus::Success);
+        assert_eq!(attempts, 2);
+        assert!(args.contains("--safe-mode"));
+        assert!(!compatible_attempt.contains("--safe-mode"));
+        assert!(!compatible_attempt.contains("--disable-slash-commands"));
+        assert!(!compatible_attempt.contains("--strict-mcp-config"));
+        assert!(compatible_attempt.contains("--output-format\nstream-json"));
+        assert!(compatible_attempt.contains("--verbose"));
     }
 
     #[cfg(unix)]

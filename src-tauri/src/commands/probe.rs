@@ -28,9 +28,10 @@ pub async fn run_probe_now(state: State<'_, AppState>) -> Result<ProbeEventDto, 
     app_log::info(
         "run_probe_now",
         format!(
-            "ok status={} error={:?}",
+            "ok status={} error={:?} stderr={}",
             dto.status.as_str(),
-            dto.error_kind
+            dto.error_kind,
+            app_log::compact(dto.stderr_summary.as_deref())
         ),
     );
     Ok(dto)

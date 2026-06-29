@@ -8,10 +8,8 @@ import { StatusPill } from "./StatusPill";
 import {
   CLAUDE_MODEL_OPTIONS,
   CONTEXT_SIZE_OPTIONS,
-  CURRENT_MODEL_VALUE,
   CUSTOM_MODEL_VALUE,
   EFFORT_OPTIONS,
-  defaultModelLabel,
   modelDisplayName,
   runtimeModelSelectValue,
 } from "../lib/modelOptions";
@@ -124,7 +122,7 @@ export function StatusHero({
     }
 
     setCustomModelOpen(false);
-    void savePatch({ model: value === CURRENT_MODEL_VALUE ? "" : value });
+    void savePatch({ model: value });
   };
 
   const saveCustomModel = () => {
@@ -158,9 +156,6 @@ export function StatusHero({
                     className="w-[clamp(156px,18vw,220px)]"
                     onValueChange={changeModel}
                   >
-                    <SelectItem value={CURRENT_MODEL_VALUE}>
-                      {defaultModelLabel(detectedDefaultModel)}
-                    </SelectItem>
                     {CLAUDE_MODEL_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {modelDisplayName(option.value)}

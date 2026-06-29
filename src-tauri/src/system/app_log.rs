@@ -20,6 +20,16 @@ pub fn path() -> PathBuf {
     base_dir().join(LOG_FILE)
 }
 
+pub fn compact(value: Option<&str>) -> String {
+    value
+        .unwrap_or("")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
+        .chars()
+        .take(500)
+        .collect()
+}
+
 fn write(level: &str, scope: &str, message: &str) {
     let _guard = LOG_MUTEX.get_or_init(|| Mutex::new(())).lock().ok();
     let path = path();
