@@ -46,6 +46,22 @@ export function migrateLegacyThemeMode(value: unknown, systemPrefersDark: boolea
   return null;
 }
 
+export function resolveStoredAppTheme(
+  storedAppTheme: unknown,
+  legacyThemeMode: unknown,
+  systemPrefersDark: boolean,
+): AppTheme {
+  if (
+    storedAppTheme === "classic-light" ||
+    storedAppTheme === "classic-dark" ||
+    storedAppTheme === "liquid-glass-light"
+  ) {
+    return storedAppTheme;
+  }
+
+  return migrateLegacyThemeMode(legacyThemeMode, systemPrefersDark) ?? "classic-light";
+}
+
 export function appThemeColorScheme(theme: AppTheme): AppThemeColorScheme {
   return theme === "classic-dark" ? "dark" : "light";
 }

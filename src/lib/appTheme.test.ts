@@ -8,6 +8,7 @@ import {
   applyAppThemeToRoot,
   migrateLegacyThemeMode,
   normalizeAppTheme,
+  resolveStoredAppTheme,
   type ThemeRootTarget,
 } from "./appTheme";
 
@@ -31,6 +32,17 @@ describe("app theme helpers", () => {
     expect(migrateLegacyThemeMode("system", true)).toBe("classic-dark");
     expect(migrateLegacyThemeMode("system", false)).toBe("classic-light");
     expect(migrateLegacyThemeMode("sepia", true)).toBeNull();
+  });
+
+  it("resolves stored app theme before legacy values", () => {
+    expect(resolveStoredAppTheme("liquid-glass-light", "dark", false)).toBe("liquid-glass-light");
+    expect(resolveStoredAppTheme("classic-dark", "light", false)).toBe("classic-dark");
+  });
+
+  it("resolves legacy theme when no app theme exists", () => {
+    expect(resolveStoredAppTheme(null, "dark", false)).toBe("classic-dark");
+    expect(resolveStoredAppTheme(null, "system", true)).toBe("classic-dark");
+    expect(resolveStoredAppTheme(null, "system", false)).toBe("classic-light");
   });
 
   it("returns labels and color schemes for every option", () => {
