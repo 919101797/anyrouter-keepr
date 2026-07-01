@@ -948,6 +948,34 @@ button > svg {
   opacity: 0.45;
 }
 
+:root[data-app-theme="liquid-glass-light"] .select-content {
+  border-color: rgba(255, 255, 255, 0.78) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78)),
+    rgba(255, 255, 255, 0.88) !important;
+  color: #111614 !important;
+  box-shadow:
+    0 24px 64px rgba(32, 48, 42, 0.2),
+    0 8px 22px rgba(32, 48, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(26px) saturate(1.8) contrast(1.06);
+}
+
+:root[data-app-theme="liquid-glass-light"] .select-item {
+  color: #111614;
+  font-weight: 700;
+}
+
+:root[data-app-theme="liquid-glass-light"] .select-item[data-highlighted] {
+  background: rgba(207, 255, 53, 0.34);
+  color: #0d1712;
+}
+
+:root[data-app-theme="liquid-glass-light"] .select-item[data-state="checked"] {
+  background: rgba(207, 255, 53, 0.28);
+  color: #0d1712;
+}
+
 .app-table-row:hover {
   background: var(--app-row-hover);
 }
