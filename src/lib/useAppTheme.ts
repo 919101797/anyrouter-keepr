@@ -4,7 +4,7 @@ import {
   LEGACY_THEME_STORAGE_KEY,
   applyAppThemeToRoot,
   normalizeAppTheme,
-  resolveStoredAppTheme,
+  resolveStoredAppThemeState,
   type AppTheme,
 } from "./appTheme";
 
@@ -33,11 +33,15 @@ export function useAppTheme() {
 function readStoredAppTheme(): AppTheme {
   if (typeof window === "undefined") return "classic-light";
   try {
-    return resolveStoredAppTheme(
+    const resolvedTheme = resolveStoredAppThemeState(
       window.localStorage.getItem(APP_THEME_STORAGE_KEY),
       window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY),
       readSystemPrefersDark(),
     );
+    if (resolvedTheme.shouldPersist) {
+      window.localStorage.setItem(APP_THEME_STORAGE_KEY, resolvedTheme.theme);
+    }
+    return resolvedTheme.theme;
   } catch {
     return "classic-light";
   }

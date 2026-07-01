@@ -8,7 +8,6 @@ export interface ThemeRootTarget {
   dataset: {
     appTheme?: string;
     theme?: string;
-    themeMode?: string;
   };
   style: {
     colorScheme: string;
@@ -51,15 +50,25 @@ export function resolveStoredAppTheme(
   legacyThemeMode: unknown,
   systemPrefersDark: boolean,
 ): AppTheme {
+  return resolveStoredAppThemeState(storedAppTheme, legacyThemeMode, systemPrefersDark).theme;
+}
+
+export function resolveStoredAppThemeState(
+  storedAppTheme: unknown,
+  legacyThemeMode: unknown,
+  systemPrefersDark: boolean,
+): { theme: AppTheme; shouldPersist: boolean } {
   if (
     storedAppTheme === "classic-light" ||
     storedAppTheme === "classic-dark" ||
     storedAppTheme === "liquid-glass-light"
   ) {
-    return storedAppTheme;
+    return { theme: storedAppTheme, shouldPersist: false };
   }
 
-  return migrateLegacyThemeMode(legacyThemeMode, systemPrefersDark) ?? "classic-light";
+  const migratedTheme = migrateLegacyThemeMode(legacyThemeMode, systemPrefersDark);
+  if (migratedTheme) return { theme: migratedTheme, shouldPersist: true };
+  return { theme: "classic-light", shouldPersist: false };
 }
 
 export function appThemeColorScheme(theme: AppTheme): AppThemeColorScheme {
@@ -78,6 +87,5 @@ export function applyAppThemeToRoot(root: ThemeRootTarget, theme: AppTheme) {
   const colorScheme = appThemeColorScheme(theme);
   root.dataset.appTheme = theme;
   root.dataset.theme = colorScheme;
-  root.dataset.themeMode = theme;
   root.style.colorScheme = colorScheme;
 }

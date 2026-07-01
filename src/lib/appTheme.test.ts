@@ -8,6 +8,7 @@ import {
   applyAppThemeToRoot,
   migrateLegacyThemeMode,
   normalizeAppTheme,
+  resolveStoredAppThemeState,
   resolveStoredAppTheme,
   type ThemeRootTarget,
 } from "./appTheme";
@@ -45,6 +46,17 @@ describe("app theme helpers", () => {
     expect(resolveStoredAppTheme(null, "system", false)).toBe("classic-light");
   });
 
+  it("marks legacy values for one-time migration to the new storage key", () => {
+    expect(resolveStoredAppThemeState(null, "system", true)).toEqual({
+      theme: "classic-dark",
+      shouldPersist: true,
+    });
+    expect(resolveStoredAppThemeState("liquid-glass-light", "dark", false)).toEqual({
+      theme: "liquid-glass-light",
+      shouldPersist: false,
+    });
+  });
+
   it("returns labels and color schemes for every option", () => {
     expect(APP_THEME_OPTIONS.map((option) => option.value)).toEqual([
       "classic-light",
@@ -66,6 +78,7 @@ describe("app theme helpers", () => {
 
     expect(root.dataset.appTheme).toBe("liquid-glass-light");
     expect(root.dataset.theme).toBe("light");
+    expect("themeMode" in root.dataset).toBe(false);
     expect(root.style.colorScheme).toBe("light");
   });
 });
