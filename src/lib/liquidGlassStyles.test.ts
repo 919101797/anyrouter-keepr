@@ -24,4 +24,13 @@ describe("liquid glass style contracts", () => {
     expect(itemRule).toContain("#111614");
     expect(checkedRule).toContain("rgba(207, 255, 53, 0.28)");
   });
+
+  it("keeps active history filters readable on glass panels", () => {
+    const activeRule = cssRule(':root[data-app-theme="liquid-glass-light"] .history-filter-active {');
+    const activeIconRule = cssRule(':root[data-app-theme="liquid-glass-light"] .history-filter-active svg');
+
+    expect(activeRule).toContain("rgba(207, 255, 53, 0.5)");
+    expect(activeRule).toContain("color: #101612");
+    expect(activeIconRule).toContain("#101612");
+  });
 });
