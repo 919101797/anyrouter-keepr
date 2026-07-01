@@ -5,6 +5,10 @@ import { cn } from "../../lib/utils";
 
 export const Select = SelectPrimitive.Root;
 export const SelectValue = SelectPrimitive.Value;
+export const SELECT_CONTENT_POSITION = "popper" satisfies SelectPrimitive.SelectContentProps["position"];
+export const SELECT_CONTENT_POSITIONING_CLASS =
+  "fixed max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)]";
+const SELECT_CONTENT_SIDE_OFFSET = 6;
 
 export function SelectTrigger({
   className,
@@ -27,14 +31,24 @@ export function SelectTrigger({
   );
 }
 
-export function SelectContent({ className, children }: SelectPrimitive.SelectContentProps) {
+export function SelectContent({
+  className,
+  children,
+  position = SELECT_CONTENT_POSITION,
+  sideOffset = SELECT_CONTENT_SIDE_OFFSET,
+  ...props
+}: SelectPrimitive.SelectContentProps) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
+        position={position}
+        sideOffset={sideOffset}
         className={cn(
           "select-content z-50 overflow-hidden rounded-[6px] border border-[#cbd8d1] bg-white text-[#17211d] shadow-xl",
+          SELECT_CONTENT_POSITIONING_CLASS,
           className,
         )}
+        {...props}
       >
         <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
       </SelectPrimitive.Content>

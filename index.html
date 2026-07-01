@@ -8,14 +8,38 @@
     <title>AnyRouter Keeper</title>
     <script>
       (() => {
-        const key = "anyrouter-keeper-theme-mode";
-        const stored = localStorage.getItem(key);
-        const mode = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
-        const systemDark = matchMedia("(prefers-color-scheme: dark)").matches;
-        const theme = mode === "dark" || (mode === "system" && systemDark) ? "dark" : "light";
-        document.documentElement.dataset.themeMode = mode;
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
+        const applyTheme = (appTheme) => {
+          const colorScheme = appTheme === "classic-dark" ? "dark" : "light";
+          document.documentElement.dataset.appTheme = appTheme;
+          document.documentElement.dataset.theme = colorScheme;
+          document.documentElement.style.colorScheme = colorScheme;
+        };
+
+        try {
+          const appThemeKey = "anyrouter-keeper-app-theme";
+          const legacyThemeKey = "anyrouter-keeper-theme-mode";
+          const storedAppTheme = localStorage.getItem(appThemeKey);
+          const systemDark = matchMedia("(prefers-color-scheme: dark)").matches;
+          const legacyTheme = localStorage.getItem(legacyThemeKey);
+          const appTheme =
+            storedAppTheme === "classic-light" ||
+            storedAppTheme === "classic-dark" ||
+            storedAppTheme === "liquid-glass-light"
+              ? storedAppTheme
+              : legacyTheme === "dark" || (legacyTheme === "system" && systemDark)
+                ? "classic-dark"
+                : "classic-light";
+          if (!storedAppTheme && (legacyTheme === "light" || legacyTheme === "dark" || legacyTheme === "system")) {
+            try {
+              localStorage.setItem(appThemeKey, appTheme);
+            } catch {
+              // Continue with the resolved theme when storage is unavailable.
+            }
+          }
+          applyTheme(appTheme);
+        } catch {
+          applyTheme("classic-light");
+        }
       })();
     </script>
   </head>

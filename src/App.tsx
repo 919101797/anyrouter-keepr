@@ -6,32 +6,31 @@ import {
   Clock4,
   HardDrive,
   Hourglass,
-  Monitor,
   Moon,
   NotebookTabs,
   Power,
   Route,
   Shuffle,
   SlidersHorizontal,
-  Sun,
   Terminal,
   Timer,
   X,
 } from "lucide-react";
 import { ActivityHeatmap } from "./components/ActivityHeatmap";
+import { LiquidGlassBackdrop } from "./components/LiquidGlassBackdrop";
 import { ProbeHistoryTable } from "./components/ProbeHistoryTable";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatStrip } from "./components/StatStrip";
 import { StatusHero } from "./components/StatusHero";
+import { ThemePicker } from "./components/ThemePicker";
 import { UpdatePanel, UpdateStatusButton } from "./components/UpdatePanel";
 import { Badge } from "./components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { contextSizeLabel, effectiveModelValue, effortLabel } from "./lib/modelOptions";
-import { themeModeLabel, type ThemeMode } from "./lib/theme";
 import { formatTimeWindow } from "./lib/timeWindow";
 import { useAppUpdater } from "./lib/useAppUpdater";
-import { useThemeMode } from "./lib/useThemeMode";
+import { useAppTheme } from "./lib/useAppTheme";
 import { useAppStore } from "./store/appStore";
 
 export default function App() {
@@ -66,7 +65,7 @@ export default function App() {
   const runtimeEffort = effortLabel(profile?.effort);
   const runtimeContext = contextSizeLabel(profile?.context_size);
   const promptPoolCount = profile?.prompt_pool?.filter((prompt) => prompt.trim()).length ?? 0;
-  const { mode: themeMode, setThemeMode } = useThemeMode();
+  const { theme, setTheme } = useAppTheme();
   const updater = useAppUpdater();
   const [showStartupNotice, setShowStartupNotice] = useState(true);
 
@@ -83,9 +82,10 @@ export default function App() {
 
   return (
     <TooltipProvider delayDuration={180}>
-      <main className="h-screen overflow-auto overflow-x-hidden p-3 text-[#17211d] sm:p-5">
-        <div className="mx-auto flex min-h-full max-w-[1500px] flex-col gap-4">
-          <header className="flex flex-col gap-3 rounded-[10px] border border-[#d2ded7] bg-white/[0.82] px-4 py-3 shadow-[0_14px_42px_rgba(36,55,47,0.08)] backdrop-blur md:flex-row md:items-center md:justify-between">
+      <main className="app-root h-screen overflow-auto overflow-x-hidden p-3 text-[#17211d] sm:p-5">
+        <LiquidGlassBackdrop />
+        <div className="app-shell mx-auto flex min-h-full max-w-[1500px] flex-col gap-4">
+          <header className="app-header flex flex-col gap-3 rounded-[10px] border border-[#d2ded7] bg-white/[0.82] px-4 py-3 shadow-[0_14px_42px_rgba(36,55,47,0.08)] backdrop-blur md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <img
                 src="/app-icon.png"
@@ -99,7 +99,7 @@ export default function App() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <UpdateStatusButton updater={updater} />
-              <ThemeCycleButton mode={themeMode} onChange={setThemeMode} />
+              <ThemePicker theme={theme} onThemeChange={setTheme} />
               <Badge variant={claudeInstallation?.status === "ready" ? "success" : "warning"}>
                 <Terminal />
                 {claudeInstallation?.status === "ready" ? "CLI 已识别" : "CLI 待确认"}
@@ -113,8 +113,8 @@ export default function App() {
             </div>
           ) : null}
 
-          <div className="flex min-h-0 flex-1 flex-col gap-4">
-            <div className="min-h-0 min-w-0 space-y-4 overflow-visible">
+          <div className="app-content flex min-h-0 flex-1 flex-col gap-4">
+            <div className="app-primary min-h-0 min-w-0 space-y-4 overflow-visible">
               <StatusHero
                 profile={profile}
                 claudeInstallation={claudeInstallation}
@@ -132,7 +132,7 @@ export default function App() {
               <ProbeHistoryTable events={events} filter={filter} onFilter={setFilter} />
             </div>
 
-            <aside className="min-h-0 min-w-0 overflow-visible">
+            <aside className="app-secondary min-h-0 min-w-0 overflow-visible">
               <Tabs defaultValue="settings">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="settings">设置</TabsTrigger>
@@ -182,32 +182,6 @@ export default function App() {
       </main>
     </TooltipProvider>
   );
-}
-
-function ThemeCycleButton({ mode, onChange }: { mode: ThemeMode; onChange: (mode: ThemeMode) => void }) {
-  const next = nextThemeMode(mode);
-  const Icon = mode === "dark" ? Moon : mode === "light" ? Sun : Monitor;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="theme-cycle-button"
-          aria-label={`主题：${themeModeLabel(mode)}，点击切换到${themeModeLabel(next)}`}
-          onClick={() => onChange(next)}
-        >
-          <Icon className="h-4 w-4" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>主题：{themeModeLabel(mode)}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function nextThemeMode(mode: ThemeMode): ThemeMode {
-  if (mode === "system") return "light";
-  if (mode === "light") return "dark";
-  return "system";
 }
 
 function StartupNotice({ onClose }: { onClose: () => void }) {
