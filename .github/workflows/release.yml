@@ -31,8 +31,36 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
       RELEASE_NAME: AnyRouter Keeper ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
-      RELEASE_BODY: Signed desktop installers and updater metadata are attached below. GitHub also shows automatic Source code archives; those are filtered and are not installation packages.
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare release notes
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+
+          const tag = process.env.RELEASE_TAG || "";
+          const version = tag.replace(/^v/, "");
+          const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+          const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const headingPattern = new RegExp(`^##\\s+${escaped}(?:\\s+-.*)?\\s*$`);
+          const lines = changelog.split(/\r?\n/);
+          const start = lines.findIndex((line) => headingPattern.test(line));
+          const end =
+            start === -1 ? -1 : lines.findIndex((line, index) => index > start && line.startsWith("## "));
+          const body =
+            start === -1 ? "" : lines.slice(start + 1, end === -1 ? undefined : end).join("\n").trim();
+          const notes = body
+            ? `## 更新日志\n\n${body}\n`
+            : `## 更新日志\n\n- 未在 CHANGELOG.md 中找到 ${tag} 对应的更新日志。\n`;
+
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, "release-notes.md"), notes);
+          NODE
+
       - name: Create draft release
         run: |
           set -euo pipefail
@@ -46,7 +74,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --draft \
             --title "$RELEASE_NAME" \
-            --notes "$RELEASE_BODY"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
 
   release:
     name: Build ${{ matrix.label }}
@@ -240,7 +268,7 @@ jobs:
         with:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: "AnyRouter Keeper ${{ env.RELEASE_TAG }}"
-          releaseBody: "Signed desktop installers and updater metadata are attached below. GitHub also shows automatic Source code archives; those are filtered and are not installation packages."
+          releaseBody: "详见本版本 GitHub Release 页面中的中文更新日志。"
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
@@ -259,6 +287,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare release notes
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+
+          const tag = process.env.RELEASE_TAG || "";
+          const version = tag.replace(/^v/, "");
+          const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+          const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const headingPattern = new RegExp(`^##\\s+${escaped}(?:\\s+-.*)?\\s*$`);
+          const lines = changelog.split(/\r?\n/);
+          const start = lines.findIndex((line) => headingPattern.test(line));
+          const end =
+            start === -1 ? -1 : lines.findIndex((line, index) => index > start && line.startsWith("## "));
+          const body =
+            start === -1 ? "" : lines.slice(start + 1, end === -1 ? undefined : end).join("\n").trim();
+          const notes = body
+            ? `## 更新日志\n\n${body}\n`
+            : `## 更新日志\n\n- 未在 CHANGELOG.md 中找到 ${tag} 对应的更新日志。\n`;
+
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, "release-notes.md"), notes);
+          NODE
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -387,4 +441,4 @@ jobs:
           exit 1
 
       - name: Publish release
-        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md" --draft=false --latest

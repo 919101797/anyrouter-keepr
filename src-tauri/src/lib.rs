@@ -69,6 +69,7 @@ pub fn run() {
             commands::claude::get_claude_key_value,
             commands::claude::get_claude_runtime_config,
             commands::claude::refresh_claude_installation,
+            commands::claude::test_claude_installation,
             commands::claude::list_claude_detection_logs,
             commands::profile::get_profile,
             commands::profile::save_profile,

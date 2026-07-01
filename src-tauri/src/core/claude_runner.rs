@@ -781,6 +781,11 @@ mod tests {
     }
 
     #[cfg(unix)]
+    fn shell_quote_path(path: &std::path::Path) -> String {
+        format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
+    }
+
+    #[cfg(unix)]
     #[tokio::test]
     async fn spawned_probe_passes_effective_model_and_effort_to_cli() {
         use std::os::unix::fs::PermissionsExt;
@@ -790,10 +795,13 @@ mod tests {
         let script_path = dir.path().join("fake-claude");
         std::fs::write(
             &script_path,
-            r#"#!/bin/sh
-printf '%s\n' "$@" > "$ANYROUTER_KEEPER_CAPTURE_ARGS"
-printf '{"result":"OK"}'
+            format!(
+                r#"#!/bin/sh
+printf '%s\n' "$@" > {}
+printf '{{"result":"OK"}}'
 "#,
+                shell_quote_path(&capture_path)
+            ),
         )
         .expect("write fake claude");
         let mut permissions = std::fs::metadata(&script_path)
@@ -801,7 +809,6 @@ printf '{"result":"OK"}'
             .permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&script_path, permissions).expect("chmod fake claude");
-        std::env::set_var("ANYROUTER_KEEPER_CAPTURE_ARGS", &capture_path);
 
         let profile = Profile {
             token: None,
@@ -838,17 +845,21 @@ printf '{"result":"OK"}'
         let script_path = dir.path().join("fake-old-claude");
         std::fs::write(
             &script_path,
-            r#"#!/bin/sh
-printf '%s\n' "---" >> "$ANYROUTER_KEEPER_CAPTURE_ARGS"
-printf '%s\n' "$@" >> "$ANYROUTER_KEEPER_CAPTURE_ARGS"
+            format!(
+                r#"#!/bin/sh
+printf '%s\n' "---" >> {}
+printf '%s\n' "$@" >> {}
 for arg in "$@"; do
   if [ "$arg" = "--safe-mode" ]; then
     printf '%s\n' "error: unknown option '--safe-mode'" >&2
     exit 1
   fi
 done
-printf '{"result":"OK"}'
+printf '{{"result":"OK"}}'
 "#,
+                shell_quote_path(&capture_path),
+                shell_quote_path(&capture_path)
+            ),
         )
         .expect("write fake old claude");
         let mut permissions = std::fs::metadata(&script_path)
@@ -856,7 +867,6 @@ printf '{"result":"OK"}'
             .permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&script_path, permissions).expect("chmod fake old claude");
-        std::env::set_var("ANYROUTER_KEEPER_CAPTURE_ARGS", &capture_path);
 
         let profile = Profile {
             token: None,
@@ -873,9 +883,8 @@ printf '{"result":"OK"}'
             .filter(|chunk| !chunk.is_empty())
             .count();
         let compatible_attempt = args
-            .split("---\n")
-            .filter(|chunk| !chunk.is_empty())
-            .next_back()
+            .rsplit("---\n")
+            .find(|chunk| !chunk.is_empty())
             .expect("compatible attempt");
 
         assert_eq!(event.status, ProbeStatus::Success);
@@ -898,10 +907,13 @@ printf '{"result":"OK"}'
         let script_path = dir.path().join("fake-claude-stdin");
         std::fs::write(
             &script_path,
-            r#"#!/bin/sh
-cat > "$ANYROUTER_KEEPER_CAPTURE_STDIN"
-printf '{"result":"OK"}'
+            format!(
+                r#"#!/bin/sh
+cat > {}
+printf '{{"result":"OK"}}'
 "#,
+                shell_quote_path(&capture_path)
+            ),
         )
         .expect("write fake claude");
         let mut permissions = std::fs::metadata(&script_path)
@@ -909,7 +921,6 @@ printf '{"result":"OK"}'
             .permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&script_path, permissions).expect("chmod fake claude");
-        std::env::set_var("ANYROUTER_KEEPER_CAPTURE_STDIN", &capture_path);
 
         let profile = Profile {
             token: None,

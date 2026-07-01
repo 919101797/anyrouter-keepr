@@ -27,6 +27,13 @@ pub async fn refresh_claude_installation(
 }
 
 #[tauri::command]
+pub async fn test_claude_installation(
+    configured_path: String,
+) -> Result<ClaudeInstallation, String> {
+    Ok(detect_claude_installation(&configured_path).await)
+}
+
+#[tauri::command]
 pub async fn list_claude_detection_logs(
     limit: Option<i64>,
     state: State<'_, AppState>,

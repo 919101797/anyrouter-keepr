@@ -13,6 +13,7 @@ import {
   modelDisplayName,
   runtimeModelSelectValue,
 } from "../lib/modelOptions";
+import { getStatusActionView, type StatusPendingAction } from "../lib/statusActions";
 import { formatTimeWindow, isAllDayWindow } from "../lib/timeWindow";
 import { formatClock, formatRelativeTime } from "../lib/utils";
 import type { AppStatus, ClaudeInstallation, ProfileInput, StoredProfile } from "../lib/types";
@@ -24,6 +25,7 @@ interface StatusHeroProps {
   claudeRuntimeConfig: ClaudeRuntimeConfig | null;
   status: AppStatus | null;
   busy: boolean;
+  pendingAction?: StatusPendingAction;
   onStart: () => void;
   onPause: () => void;
   onProbe: () => void;
@@ -63,6 +65,7 @@ export function StatusHero({
   claudeRuntimeConfig,
   status,
   busy,
+  pendingAction = null,
   onStart,
   onPause,
   onProbe,
@@ -71,6 +74,11 @@ export function StatusHero({
   const [customModelOpen, setCustomModelOpen] = useState(false);
   const [customModelDraft, setCustomModelDraft] = useState("");
   const running = Boolean(status?.running);
+  const actionView = getStatusActionView({
+    running,
+    loading: busy && !pendingAction,
+    pendingAction,
+  });
   const state = status?.current_state ?? "paused";
   const endpoint = profile?.base_url?.trim() || "Claude Code / cc-switch 当前配置";
   const cliPath = claudeInstallation?.effective_path || profile?.claude_binary_path?.trim() || "PATH: claude";
@@ -254,7 +262,7 @@ export function StatusHero({
           <div className="grid gap-2">
             <Button
               onClick={running ? onPause : onStart}
-              disabled={busy}
+              disabled={actionView.guardDisabled}
               variant="secondary"
               className={
                 running
@@ -262,12 +270,23 @@ export function StatusHero({
                   : "border-transparent bg-[#cfff4e] text-[#121815] hover:bg-[#dfff78]"
               }
             >
-              {running ? <Pause /> : <Play />}
-              {running ? "暂停守护" : "开始守护"}
+              {actionView.guardPending ? (
+                <RotateCw className="animate-spin" />
+              ) : running ? (
+                <Pause />
+              ) : (
+                <Play />
+              )}
+              {actionView.guardLabel}
             </Button>
-            <Button onClick={onProbe} disabled={busy} variant="outline" className="status-hero-probe-button">
-              {busy ? <RotateCw className="animate-spin" /> : <ScanSearch />}
-              探测一次
+            <Button
+              onClick={onProbe}
+              disabled={actionView.probeDisabled}
+              variant="outline"
+              className="status-hero-probe-button"
+            >
+              {actionView.probePending ? <RotateCw className="animate-spin" /> : <ScanSearch />}
+              {actionView.probeLabel}
             </Button>
           </div>
         </div>

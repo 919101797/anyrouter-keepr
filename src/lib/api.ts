@@ -143,6 +143,22 @@ export const api = {
     return invoke("refresh_claude_installation");
   },
 
+  async testClaudeInstallation(configuredPath: string): Promise<ClaudeInstallation> {
+    if (!inTauri) {
+      const trimmed = configuredPath.trim();
+      const isDirectory = trimmed.endsWith("/bin") || trimmed.endsWith("\\bin");
+      return {
+        ...mockClaudeInstallation,
+        checked_at: new Date().toISOString(),
+        configured_path: trimmed,
+        detected_path: null,
+        effective_path: isDirectory ? `${trimmed}/claude` : trimmed || mockClaudeInstallation.effective_path,
+        source: trimmed ? "manual" : "path",
+      };
+    }
+    return invoke("test_claude_installation", { configuredPath });
+  },
+
   async listClaudeDetectionLogs(limit = 20): Promise<ClaudeDetectionLog[]> {
     if (!inTauri) return mockClaudeDetectionLogs;
     return invoke("list_claude_detection_logs", { limit });
