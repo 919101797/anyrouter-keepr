@@ -6,14 +6,12 @@ import {
   Clock4,
   HardDrive,
   Hourglass,
-  Monitor,
   Moon,
   NotebookTabs,
   Power,
   Route,
   Shuffle,
   SlidersHorizontal,
-  Sun,
   Terminal,
   Timer,
   X,
@@ -23,15 +21,15 @@ import { ProbeHistoryTable } from "./components/ProbeHistoryTable";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatStrip } from "./components/StatStrip";
 import { StatusHero } from "./components/StatusHero";
+import { ThemePicker } from "./components/ThemePicker";
 import { UpdatePanel, UpdateStatusButton } from "./components/UpdatePanel";
 import { Badge } from "./components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { contextSizeLabel, effectiveModelValue, effortLabel } from "./lib/modelOptions";
-import { themeModeLabel, type ThemeMode } from "./lib/theme";
 import { formatTimeWindow } from "./lib/timeWindow";
 import { useAppUpdater } from "./lib/useAppUpdater";
-import { useThemeMode } from "./lib/useThemeMode";
+import { useAppTheme } from "./lib/useAppTheme";
 import { useAppStore } from "./store/appStore";
 
 export default function App() {
@@ -64,7 +62,7 @@ export default function App() {
   const runtimeEffort = effortLabel(profile?.effort);
   const runtimeContext = contextSizeLabel(profile?.context_size);
   const promptPoolCount = profile?.prompt_pool?.filter((prompt) => prompt.trim()).length ?? 0;
-  const { mode: themeMode, setThemeMode } = useThemeMode();
+  const { theme, setTheme } = useAppTheme();
   const updater = useAppUpdater();
   const [showStartupNotice, setShowStartupNotice] = useState(true);
 
@@ -97,7 +95,7 @@ export default function App() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <UpdateStatusButton updater={updater} />
-              <ThemeCycleButton mode={themeMode} onChange={setThemeMode} />
+              <ThemePicker theme={theme} onThemeChange={setTheme} />
               <Badge variant={claudeInstallation?.status === "ready" ? "success" : "warning"}>
                 <Terminal />
                 {claudeInstallation?.status === "ready" ? "CLI 已识别" : "CLI 待确认"}
@@ -177,32 +175,6 @@ export default function App() {
       </main>
     </TooltipProvider>
   );
-}
-
-function ThemeCycleButton({ mode, onChange }: { mode: ThemeMode; onChange: (mode: ThemeMode) => void }) {
-  const next = nextThemeMode(mode);
-  const Icon = mode === "dark" ? Moon : mode === "light" ? Sun : Monitor;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="theme-cycle-button"
-          aria-label={`主题：${themeModeLabel(mode)}，点击切换到${themeModeLabel(next)}`}
-          onClick={() => onChange(next)}
-        >
-          <Icon className="h-4 w-4" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>主题：{themeModeLabel(mode)}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function nextThemeMode(mode: ThemeMode): ThemeMode {
-  if (mode === "system") return "light";
-  if (mode === "light") return "dark";
-  return "system";
 }
 
 function StartupNotice({ onClose }: { onClose: () => void }) {

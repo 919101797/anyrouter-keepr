@@ -1268,3 +1268,33 @@ button > svg {
 :root[data-theme="dark"] [class~="hover:bg-white"]:hover {
   background-color: var(--app-surface-raised) !important;
 }
+
+.theme-picker-trigger {
+  min-width: 132px;
+  height: 32px;
+  border-color: var(--app-border-strong) !important;
+  border-radius: 7px !important;
+  background: color-mix(in srgb, var(--app-surface) 76%, transparent) !important;
+  color: var(--app-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  backdrop-filter: blur(14px);
+}
+
+.theme-picker-trigger:hover,
+.theme-picker-trigger[data-state="open"] {
+  border-color: var(--app-focus) !important;
+  background: var(--app-control-hover) !important;
+  color: var(--app-text) !important;
+}
+
+.theme-picker-item {
+  display: grid;
+  gap: 2px;
+}
+
+.theme-picker-item span:last-child {
+  color: var(--app-text-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
