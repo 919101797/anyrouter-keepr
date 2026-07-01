@@ -199,11 +199,59 @@ button > svg {
   z-index: 0;
   display: block;
   overflow: hidden;
+  opacity: 0.72;
+  filter: saturate(1.08);
 }
 
 :root[data-app-theme="liquid-glass-light"] .lg-refraction-layer svg {
   width: 100%;
   height: 100%;
+}
+
+:root[data-app-theme="liquid-glass-light"] .app-shell {
+  max-width: 1500px;
+}
+
+:root[data-app-theme="liquid-glass-light"] .app-header,
+:root[data-app-theme="liquid-glass-light"] .theme-picker-trigger,
+:root[data-app-theme="liquid-glass-light"] .update-status-button {
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08) 48%),
+    rgba(255, 255, 255, 0.08) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset -1px 0 0 rgba(116, 151, 255, 0.22),
+    0 18px 38px rgba(47, 58, 52, 0.13) !important;
+  backdrop-filter: blur(18px) saturate(1.8) contrast(1.04);
+}
+
+:root[data-app-theme="liquid-glass-light"] .panel-ring {
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34)),
+    rgba(255, 255, 255, 0.3) !important;
+  box-shadow:
+    0 24px 70px rgba(45, 58, 51, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px) saturate(1.25);
+}
+
+:root[data-app-theme="liquid-glass-light"] .status-hero {
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.38)),
+    radial-gradient(circle at 82% 82%, rgba(207, 255, 53, 0.42), transparent 34%) !important;
+}
+
+:root[data-app-theme="liquid-glass-light"] .status-hero-select-shell,
+:root[data-app-theme="liquid-glass-light"] .status-hero-side-panel,
+:root[data-app-theme="liquid-glass-light"] .status-hero-metric,
+:root[data-app-theme="liquid-glass-light"] .status-hero-side-icon,
+:root[data-app-theme="liquid-glass-light"] .history-filter-active,
+:root[data-app-theme="liquid-glass-light"] .history-filter-button {
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  backdrop-filter: blur(18px) saturate(1.55);
 }
 
 ::-webkit-scrollbar {
