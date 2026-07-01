@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { ActivityHeatmap } from "./components/ActivityHeatmap";
+import { LiquidGlassBackdrop } from "./components/LiquidGlassBackdrop";
 import { ProbeHistoryTable } from "./components/ProbeHistoryTable";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatStrip } from "./components/StatStrip";
@@ -79,8 +80,9 @@ export default function App() {
 
   return (
     <TooltipProvider delayDuration={180}>
-      <main className="h-screen overflow-auto overflow-x-hidden p-3 text-[#17211d] sm:p-5">
-        <div className="mx-auto flex min-h-full max-w-[1500px] flex-col gap-4">
+      <main className="app-root h-screen overflow-auto overflow-x-hidden p-3 text-[#17211d] sm:p-5">
+        <LiquidGlassBackdrop />
+        <div className="app-shell mx-auto flex min-h-full max-w-[1500px] flex-col gap-4">
           <header className="flex flex-col gap-3 rounded-[10px] border border-[#d2ded7] bg-white/[0.82] px-4 py-3 shadow-[0_14px_42px_rgba(36,55,47,0.08)] backdrop-blur md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <img
