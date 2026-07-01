@@ -1,6 +1,6 @@
 import { Palette } from "lucide-react";
 import { APP_THEME_OPTIONS, appThemeLabel, type AppTheme } from "../lib/appTheme";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 interface ThemePickerProps {
@@ -15,7 +15,7 @@ export function ThemePicker({ theme, onThemeChange }: ThemePickerProps) {
         <TooltipTrigger asChild>
           <SelectTrigger className="theme-picker-trigger" aria-label={`主题：${appThemeLabel(theme)}`}>
             <Palette className="h-4 w-4" />
-            <SelectValue />
+            <span className="theme-picker-current">{appThemeLabel(theme)}</span>
           </SelectTrigger>
         </TooltipTrigger>
         <TooltipContent>主题：{appThemeLabel(theme)}</TooltipContent>

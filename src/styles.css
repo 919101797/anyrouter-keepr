@@ -388,38 +388,6 @@ button > svg {
   font-weight: 700;
 }
 
-.theme-cycle-button {
-  display: inline-flex;
-  height: 32px;
-  width: 32px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--app-border-strong);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--app-surface) 76%, transparent);
-  color: var(--app-text-muted);
-  outline: none;
-  backdrop-filter: blur(14px);
-  transition:
-    border-color 150ms ease,
-    background-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease,
-    transform 150ms ease;
-}
-
-.theme-cycle-button:hover {
-  border-color: var(--app-focus);
-  background: var(--app-control-hover);
-  color: var(--app-text);
-  box-shadow: 0 10px 22px rgba(21, 154, 140, 0.1);
-  transform: translateY(-1px);
-}
-
-.theme-cycle-button:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-focus) 18%, transparent);
-}
-
 .update-status-button {
   display: inline-flex;
   height: 32px;
@@ -1081,13 +1049,6 @@ button > svg {
   box-shadow: 0 12px 26px rgba(207, 255, 78, 0.12);
 }
 
-:root[data-theme="dark"] .theme-cycle-button:hover {
-  border-color: #54e7db;
-  background: #1d2b24;
-  color: #f4fbf7;
-  box-shadow: 0 10px 22px rgba(84, 231, 219, 0.08);
-}
-
 :root[data-theme="dark"] .prompt-pool-item:hover {
   background: #16231d;
   box-shadow: none;
@@ -1286,6 +1247,12 @@ button > svg {
   border-color: var(--app-focus) !important;
   background: var(--app-control-hover) !important;
   color: var(--app-text) !important;
+}
+
+.theme-picker-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .theme-picker-item {
