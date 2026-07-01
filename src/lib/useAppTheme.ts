@@ -39,7 +39,11 @@ function readStoredAppTheme(): AppTheme {
       readSystemPrefersDark(),
     );
     if (resolvedTheme.shouldPersist) {
-      window.localStorage.setItem(APP_THEME_STORAGE_KEY, resolvedTheme.theme);
+      try {
+        window.localStorage.setItem(APP_THEME_STORAGE_KEY, resolvedTheme.theme);
+      } catch {
+        // The resolved legacy theme should still be applied even if migration cannot persist.
+      }
     }
     return resolvedTheme.theme;
   } catch {
