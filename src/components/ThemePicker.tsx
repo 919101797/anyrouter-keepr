@@ -13,7 +13,7 @@ export function ThemePicker({ theme, onThemeChange }: ThemePickerProps) {
     <Select value={theme} onValueChange={(value) => onThemeChange(value as AppTheme)}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <SelectTrigger className="theme-picker-trigger" aria-label={`主题：${appThemeLabel(theme)}`}>
+          <SelectTrigger className="theme-picker-trigger w-auto" aria-label={`主题：${appThemeLabel(theme)}`}>
             <Palette className="h-4 w-4" />
             <span className="theme-picker-current">{appThemeLabel(theme)}</span>
           </SelectTrigger>
