@@ -15,6 +15,7 @@ cloudflare-pages/
 # Local runtime data
 *.log
 .superpowers/
+.worktrees/
 *.sqlite
 *.sqlite3
 *.sqlite-shm
