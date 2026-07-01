@@ -71,6 +71,10 @@ describe("app theme helpers", () => {
     expect(appThemeColorScheme("liquid-glass-light")).toBe("light");
   });
 
+  it("keeps theme picker options label-only", () => {
+    expect(APP_THEME_OPTIONS.every((option) => !("description" in option))).toBe(true);
+  });
+
   it("applies root attributes for the selected theme", () => {
     const root = { dataset: {}, style: { colorScheme: "" } } as ThemeRootTarget;
 

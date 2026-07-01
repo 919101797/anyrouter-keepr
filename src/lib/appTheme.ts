@@ -14,21 +14,18 @@ export interface ThemeRootTarget {
   };
 }
 
-export const APP_THEME_OPTIONS: Array<{ value: AppTheme; label: string; description: string }> = [
+export const APP_THEME_OPTIONS: Array<{ value: AppTheme; label: string }> = [
   {
     value: "classic-light",
     label: "经典亮色",
-    description: "保留当前浅色界面",
   },
   {
     value: "classic-dark",
     label: "经典暗色",
-    description: "保留当前暗色界面",
   },
   {
     value: "liquid-glass-light",
     label: "液态玻璃",
-    description: "浅色通透玻璃风格",
   },
 ];
 
@@ -77,10 +74,6 @@ export function appThemeColorScheme(theme: AppTheme): AppThemeColorScheme {
 
 export function appThemeLabel(theme: AppTheme) {
   return APP_THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "经典亮色";
-}
-
-export function appThemeDescription(theme: AppTheme) {
-  return APP_THEME_OPTIONS.find((option) => option.value === theme)?.description ?? "保留当前浅色界面";
 }
 
 export function applyAppThemeToRoot(root: ThemeRootTarget, theme: AppTheme) {

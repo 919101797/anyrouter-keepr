@@ -25,7 +25,6 @@ export function ThemePicker({ theme, onThemeChange }: ThemePickerProps) {
           <SelectItem key={option.value} value={option.value}>
             <span className="theme-picker-item">
               <span>{option.label}</span>
-              <span>{option.description}</span>
             </span>
           </SelectItem>
         ))}
