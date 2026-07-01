@@ -1,0 +1,67 @@
+export const APP_THEME_STORAGE_KEY = "anyrouter-keeper-app-theme";
+export const LEGACY_THEME_STORAGE_KEY = "anyrouter-keeper-theme-mode";
+
+export type AppTheme = "classic-light" | "classic-dark" | "liquid-glass-light";
+export type AppThemeColorScheme = "light" | "dark";
+
+export interface ThemeRootTarget {
+  dataset: {
+    appTheme?: string;
+    theme?: string;
+    themeMode?: string;
+  };
+  style: {
+    colorScheme: string;
+  };
+}
+
+export const APP_THEME_OPTIONS: Array<{ value: AppTheme; label: string; description: string }> = [
+  {
+    value: "classic-light",
+    label: "经典亮色",
+    description: "保留当前浅色界面",
+  },
+  {
+    value: "classic-dark",
+    label: "经典暗色",
+    description: "保留当前暗色界面",
+  },
+  {
+    value: "liquid-glass-light",
+    label: "液态玻璃",
+    description: "浅色通透玻璃风格",
+  },
+];
+
+export function normalizeAppTheme(value: unknown): AppTheme {
+  return value === "classic-dark" || value === "liquid-glass-light" || value === "classic-light"
+    ? value
+    : "classic-light";
+}
+
+export function migrateLegacyThemeMode(value: unknown, systemPrefersDark: boolean): AppTheme | null {
+  if (value === "light") return "classic-light";
+  if (value === "dark") return "classic-dark";
+  if (value === "system") return systemPrefersDark ? "classic-dark" : "classic-light";
+  return null;
+}
+
+export function appThemeColorScheme(theme: AppTheme): AppThemeColorScheme {
+  return theme === "classic-dark" ? "dark" : "light";
+}
+
+export function appThemeLabel(theme: AppTheme) {
+  return APP_THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "经典亮色";
+}
+
+export function appThemeDescription(theme: AppTheme) {
+  return APP_THEME_OPTIONS.find((option) => option.value === theme)?.description ?? "保留当前浅色界面";
+}
+
+export function applyAppThemeToRoot(root: ThemeRootTarget, theme: AppTheme) {
+  const colorScheme = appThemeColorScheme(theme);
+  root.dataset.appTheme = theme;
+  root.dataset.theme = colorScheme;
+  root.dataset.themeMode = theme;
+  root.style.colorScheme = colorScheme;
+}
