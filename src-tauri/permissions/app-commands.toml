@@ -1,0 +1,31 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "allow-app-commands"
+description = "Allows the main window to call AnyRouter Keeper application commands."
+commands.allow = [
+  "get_profile",
+  "save_profile",
+  "run_probe_now",
+  "start_scheduler",
+  "pause_scheduler",
+  "get_current_status",
+  "list_probe_events",
+  "get_activity_summary",
+  "compact_storage",
+  "get_claude_installation",
+  "get_claude_key_value",
+  "get_claude_runtime_config",
+  "refresh_claude_installation",
+  "test_claude_installation",
+  "list_claude_detection_logs",
+  "get_claude_fingerprint_snapshot",
+  "regenerate_claude_fingerprint",
+  "restore_claude_fingerprint",
+  "delete_claude_fingerprint_history",
+  "switch_all_fingerprints",
+  "get_proxy_status",
+  "set_proxy_target",
+  "start_proxy",
+  "stop_proxy",
+]

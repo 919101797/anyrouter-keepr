@@ -249,6 +249,20 @@ pub struct ProbeEvent {
     pub stderr_summary: Option<String>,
     pub stdout_truncated: bool,
     pub stderr_truncated: bool,
+    #[serde(default)]
+    pub fingerprint_os: Option<String>,
+    #[serde(default)]
+    pub fingerprint_arch: Option<String>,
+    #[serde(default)]
+    pub fingerprint_device_id: Option<String>,
+    #[serde(default)]
+    pub fingerprint_device_id_status: Option<String>,
+    #[serde(default)]
+    pub fingerprint_session_id_status: Option<String>,
+    #[serde(default)]
+    pub fingerprint_context_management: Option<String>,
+    #[serde(default)]
+    pub fingerprint_source: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -270,6 +284,36 @@ pub struct ProbeEventDto {
     pub stderr_summary: Option<String>,
     pub stdout_truncated: bool,
     pub stderr_truncated: bool,
+    pub fingerprint_os: Option<String>,
+    pub fingerprint_arch: Option<String>,
+    pub fingerprint_device_id: Option<String>,
+    pub fingerprint_device_id_status: Option<String>,
+    pub fingerprint_session_id_status: Option<String>,
+    pub fingerprint_context_management: Option<String>,
+    pub fingerprint_source: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProbeFingerprint {
+    pub os: Option<String>,
+    pub arch: Option<String>,
+    pub device_id: Option<String>,
+    pub device_id_status: Option<String>,
+    pub session_id_status: Option<String>,
+    pub context_management: Option<String>,
+    pub source: Option<String>,
+}
+
+impl ProbeEvent {
+    pub fn attach_fingerprint(&mut self, fingerprint: ProbeFingerprint) {
+        self.fingerprint_os = fingerprint.os;
+        self.fingerprint_arch = fingerprint.arch;
+        self.fingerprint_device_id = fingerprint.device_id;
+        self.fingerprint_device_id_status = fingerprint.device_id_status;
+        self.fingerprint_session_id_status = fingerprint.session_id_status;
+        self.fingerprint_context_management = fingerprint.context_management;
+        self.fingerprint_source = fingerprint.source;
+    }
 }
 
 impl From<ProbeEvent> for ProbeEventDto {
@@ -292,6 +336,13 @@ impl From<ProbeEvent> for ProbeEventDto {
             stderr_summary: event.stderr_summary,
             stdout_truncated: event.stdout_truncated,
             stderr_truncated: event.stderr_truncated,
+            fingerprint_os: event.fingerprint_os,
+            fingerprint_arch: event.fingerprint_arch,
+            fingerprint_device_id: event.fingerprint_device_id,
+            fingerprint_device_id_status: event.fingerprint_device_id_status,
+            fingerprint_session_id_status: event.fingerprint_session_id_status,
+            fingerprint_context_management: event.fingerprint_context_management,
+            fingerprint_source: event.fingerprint_source,
         }
     }
 }

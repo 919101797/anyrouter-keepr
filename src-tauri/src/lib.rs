@@ -9,12 +9,15 @@ use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
+use crate::core::proxy::ProxyConfig;
+use crate::core::proxy::ProxyHandle;
 use crate::core::scheduler::SchedulerHandle;
 use crate::storage::db::Database;
 
 pub struct AppState {
     pub db: Arc<Database>,
     pub scheduler: Arc<Mutex<SchedulerHandle>>,
+    pub proxy: Arc<Mutex<ProxyHandle>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -40,11 +43,22 @@ pub fn run() {
 
             let db = Arc::new(Database::open_default()?);
             db.migrate()?;
-            let scheduler = Arc::new(Mutex::new(SchedulerHandle::new(db.clone())));
+            let saved_target = db
+                .load_proxy_target()
+                .unwrap_or_else(|_| (String::from("Windows"), String::from("x64")));
+            let proxy_config = ProxyConfig {
+                target_os: saved_target.0,
+                target_arch: saved_target.1,
+                upstream_url: String::from("https://anyrouter.top"),
+                dynamic_upstream: true,
+            };
+            let proxy = Arc::new(Mutex::new(ProxyHandle::new(proxy_config, 15800)));
+            let scheduler = Arc::new(Mutex::new(SchedulerHandle::new(db.clone(), proxy.clone())));
             let should_restore_scheduler = db.is_enabled().unwrap_or(false);
             app.manage(AppState {
                 db,
                 scheduler: scheduler.clone(),
+                proxy,
             });
             system::tray::setup_tray(app)?;
             if should_restore_scheduler {
@@ -71,9 +85,18 @@ pub fn run() {
             commands::claude::refresh_claude_installation,
             commands::claude::test_claude_installation,
             commands::claude::list_claude_detection_logs,
+            commands::fingerprint::delete_claude_fingerprint_history,
+            commands::fingerprint::get_claude_fingerprint_snapshot,
+            commands::fingerprint::regenerate_claude_fingerprint,
+            commands::fingerprint::restore_claude_fingerprint,
+            commands::fingerprint::switch_all_fingerprints,
             commands::profile::get_profile,
             commands::profile::save_profile,
             commands::probe::run_probe_now,
+            commands::proxy::get_proxy_status,
+            commands::proxy::set_proxy_target,
+            commands::proxy::start_proxy,
+            commands::proxy::stop_proxy,
             commands::scheduler::start_scheduler,
             commands::scheduler::pause_scheduler,
             commands::scheduler::get_current_status,

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import type { StatusPendingAction } from "../lib/statusActions";
+import type { ClaudeFingerprintSnapshot, ProxyStatus } from "../lib/fingerprint";
 import type {
   ActivityBucket,
   AppStatus,
@@ -20,6 +21,8 @@ interface AppStore {
   claudeInstallation: ClaudeInstallation | null;
   claudeRuntimeConfig: ClaudeRuntimeConfig | null;
   claudeDetectionLogs: ClaudeDetectionLog[];
+  claudeFingerprintSnapshot: ClaudeFingerprintSnapshot | null;
+  proxyStatus: ProxyStatus | null;
   anchorTime: number;
   autostartEnabled: boolean;
   loading: boolean;
@@ -37,6 +40,15 @@ interface AppStore {
   pauseScheduler: () => Promise<void>;
   setFilter: (filter: string) => Promise<void>;
   setAutostart: (enabled: boolean) => Promise<void>;
+  refreshClaudeFingerprint: () => Promise<void>;
+  regenerateClaudeFingerprint: () => Promise<void>;
+  restoreClaudeFingerprint: (id: string) => Promise<void>;
+  deleteClaudeFingerprintHistory: (id: string) => Promise<void>;
+  refreshProxyStatus: () => Promise<void>;
+  startProxy: () => Promise<void>;
+  stopProxy: () => Promise<void>;
+  setProxyTarget: (targetOs: string, targetArch: string) => Promise<void>;
+  switchAllFingerprints: () => Promise<void>;
 }
 
 async function readRuntimeSnapshot() {
@@ -49,12 +61,15 @@ async function readRuntimeSnapshot() {
 }
 
 async function readClaudeSnapshot() {
-  const [claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs] = await Promise.all([
-    api.getClaudeInstallation(),
-    api.getClaudeRuntimeConfig(),
-    api.listClaudeDetectionLogs(20),
-  ]);
-  return { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs };
+  const [claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus] =
+    await Promise.all([
+      api.getClaudeInstallation(),
+      api.getClaudeRuntimeConfig(),
+      api.listClaudeDetectionLogs(20),
+      api.getClaudeFingerprintSnapshot(),
+      api.getProxyStatus(),
+    ]);
+  return { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus };
 }
 
 async function readFullSnapshot() {
@@ -70,6 +85,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   claudeInstallation: null,
   claudeRuntimeConfig: null,
   claudeDetectionLogs: [],
+  claudeFingerprintSnapshot: null,
+  proxyStatus: null,
   anchorTime: Date.now(),
   autostartEnabled: false,
   loading: false,
@@ -88,11 +105,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         api.getActivitySummary(24),
         api.isAutostartEnabled(),
       ]);
-      const [claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs] = await Promise.all([
-        api.getClaudeInstallation(),
-        api.getClaudeRuntimeConfig(),
-        api.listClaudeDetectionLogs(20),
-      ]);
+      const { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus } =
+        await readClaudeSnapshot();
       set({
         profile,
         status,
@@ -102,6 +116,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         claudeInstallation,
         claudeRuntimeConfig,
         claudeDetectionLogs,
+        claudeFingerprintSnapshot,
+        proxyStatus,
         anchorTime: Date.now(),
         loading: false,
       });
@@ -123,16 +139,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ busy: true, pendingAction: "profile", error: null });
     try {
       const saved = await api.saveProfile(profile);
-      const [claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs] = await Promise.all([
-        api.getClaudeInstallation(),
-        api.getClaudeRuntimeConfig(),
-        api.listClaudeDetectionLogs(20),
-      ]);
+      const { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus } =
+        await readClaudeSnapshot();
       set({
         profile: saved,
         claudeInstallation,
         claudeRuntimeConfig,
         claudeDetectionLogs,
+        claudeFingerprintSnapshot,
+        proxyStatus,
         busy: false,
         pendingAction: null,
       });
@@ -222,6 +237,139 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({ autostartEnabled: enabled, busy: false, pendingAction: null });
     } catch (error) {
       set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async refreshClaudeFingerprint() {
+    set({ busy: true, pendingAction: "fingerprint_refresh", error: null });
+    try {
+      const [claudeFingerprintSnapshot, proxyStatus] = await Promise.all([
+        api.getClaudeFingerprintSnapshot(),
+        api.getProxyStatus(),
+      ]);
+      set({
+        claudeFingerprintSnapshot,
+        proxyStatus,
+        busy: false,
+        pendingAction: null,
+        error: claudeFingerprintSnapshot.error ?? null,
+      });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async regenerateClaudeFingerprint() {
+    set({ busy: true, pendingAction: "fingerprint", error: null });
+    try {
+      const claudeFingerprintSnapshot = await api.regenerateClaudeFingerprint();
+      set({
+        claudeFingerprintSnapshot,
+        busy: false,
+        pendingAction: null,
+        error: claudeFingerprintSnapshot.error ?? null,
+      });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async restoreClaudeFingerprint(id) {
+    set({ busy: true, pendingAction: "fingerprint", error: null });
+    try {
+      const claudeFingerprintSnapshot = await api.restoreClaudeFingerprint(id);
+      set({
+        claudeFingerprintSnapshot,
+        busy: false,
+        pendingAction: null,
+        error: claudeFingerprintSnapshot.error ?? null,
+      });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async deleteClaudeFingerprintHistory(id) {
+    set({ busy: true, pendingAction: "fingerprint", error: null });
+    try {
+      const claudeFingerprintSnapshot = await api.deleteClaudeFingerprintHistory(id);
+      set({
+        claudeFingerprintSnapshot,
+        busy: false,
+        pendingAction: null,
+        error: claudeFingerprintSnapshot.error ?? null,
+      });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async refreshProxyStatus() {
+    try {
+      const proxyStatus = await api.getProxyStatus();
+      set({ proxyStatus, error: proxyStatus.error ?? null });
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  async startProxy() {
+    set({ busy: true, pendingAction: "proxy", error: null });
+    try {
+      const proxyStatus = await api.startProxy();
+      set({ proxyStatus, error: proxyStatus.error ?? null, busy: false, pendingAction: null });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async stopProxy() {
+    set({ busy: true, pendingAction: "proxy", error: null });
+    try {
+      const proxyStatus = await api.stopProxy();
+      set({ proxyStatus, error: proxyStatus.error ?? null, busy: false, pendingAction: null });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async setProxyTarget(targetOs, targetArch) {
+    set({ busy: true, pendingAction: "proxy_target", error: null });
+    try {
+      const proxyStatus = await api.setProxyTarget(targetOs, targetArch);
+      set({ proxyStatus, error: proxyStatus.error ?? null, busy: false, pendingAction: null });
+    } catch (error) {
+      set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+  async switchAllFingerprints() {
+    set({ busy: true, pendingAction: "fingerprint", error: null });
+    try {
+      const result = await api.switchAllFingerprints();
+      set({
+        claudeFingerprintSnapshot: result.fingerprint,
+        proxyStatus: result.proxy,
+        busy: false,
+        pendingAction: null,
+        error: result.fingerprint.error ?? null,
+      });
+    } catch (error) {
+      const message = String(error);
+      try {
+        const [claudeFingerprintSnapshot, proxyStatus] = await Promise.all([
+          api.getClaudeFingerprintSnapshot(),
+          api.getProxyStatus(),
+        ]);
+        set({
+          claudeFingerprintSnapshot,
+          proxyStatus,
+          error: message,
+          busy: false,
+          pendingAction: null,
+        });
+      } catch {
+        set({ error: message, busy: false, pendingAction: null });
+      }
     }
   },
 }));

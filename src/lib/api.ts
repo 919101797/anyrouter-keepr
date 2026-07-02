@@ -10,10 +10,16 @@ import type {
   ProfileInput,
   StoredProfile,
 } from "./types";
+import type { ClaudeFingerprintSnapshot, ProxyStatus } from "./fingerprint";
 import { DEFAULT_PROMPT_TAGS } from "./promptTags";
 import { DEFAULT_END_TIME, DEFAULT_START_TIME } from "./timeWindow";
 
 const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+export interface SwitchAllFingerprintsResult {
+  fingerprint: ClaudeFingerprintSnapshot;
+  proxy: ProxyStatus;
+}
 
 const mockEvents: ProbeEvent[] = [
   {
@@ -112,6 +118,46 @@ const mockClaudeDetectionLogs: ClaudeDetectionLog[] = [
   },
 ];
 
+const mockClaudeFingerprintSnapshot: ClaudeFingerprintSnapshot = {
+  current: {
+    checked_at: new Date().toISOString(),
+    claude_state_path: "/Users/mock/.claude.json",
+    stainless_os: "MacOS",
+    stainless_arch: "arm64",
+    device_id: "5a60043ffe0e04ff78da4ed3ebebbb4aa9e263b5417f595270b1c646534bf421",
+    device_id_status: "present",
+    session_id_status: "runtime_generated_by_claude_code",
+    risk_label: "AnyRouter 1M routing key: OS + Arch + device_id",
+  },
+  history: [
+    {
+      id: "mock-fingerprint-1",
+      captured_at: new Date(Date.now() - 4 * 60_000).toISOString(),
+      source: "generated",
+      claude_state_path: "/Users/mock/.claude.json",
+      stainless_os: "MacOS",
+      stainless_arch: "arm64",
+      device_id: "5a60043ffe0e04ff78da4ed3ebebbb4aa9e263b5417f595270b1c646534bf421",
+      device_id_status: "present",
+      session_id_status: "runtime_generated_by_claude_code",
+      risk_label: "AnyRouter 1M routing key: OS + Arch + device_id",
+    },
+    {
+      id: "mock-fingerprint-2",
+      captured_at: new Date(Date.now() - 18 * 60_000).toISOString(),
+      source: "captured_before_regenerate",
+      claude_state_path: "/Users/mock/.claude.json",
+      stainless_os: "Windows",
+      stainless_arch: "x64",
+      device_id: "1b750947616d19fc1b8bba20b8024351b1a61012ea72c38b99d33071f4e3a74b",
+      device_id_status: "present",
+      session_id_status: "runtime_generated_by_claude_code",
+      risk_label: "AnyRouter 1M routing key: OS + Arch + device_id",
+    },
+  ],
+  error: null,
+};
+
 export const api = {
   async getProfile(): Promise<StoredProfile> {
     if (!inTauri) return mockProfile;
@@ -162,6 +208,110 @@ export const api = {
   async listClaudeDetectionLogs(limit = 20): Promise<ClaudeDetectionLog[]> {
     if (!inTauri) return mockClaudeDetectionLogs;
     return invoke("list_claude_detection_logs", { limit });
+  },
+
+  async getClaudeFingerprintSnapshot(): Promise<ClaudeFingerprintSnapshot> {
+    if (!inTauri) return mockClaudeFingerprintSnapshot;
+    return invoke("get_claude_fingerprint_snapshot");
+  },
+
+  async regenerateClaudeFingerprint(): Promise<ClaudeFingerprintSnapshot> {
+    if (!inTauri) {
+      return {
+        ...mockClaudeFingerprintSnapshot,
+        current: {
+          ...mockClaudeFingerprintSnapshot.current!,
+          checked_at: new Date().toISOString(),
+          device_id: "cff2afa3147b17a437d6a02b8d1e83d33bcc619e52d43172fdf3e15b03b6d2e8",
+        },
+      };
+    }
+    return invoke("regenerate_claude_fingerprint");
+  },
+
+  async restoreClaudeFingerprint(id: string): Promise<ClaudeFingerprintSnapshot> {
+    if (!inTauri) {
+      const selected = mockClaudeFingerprintSnapshot.history.find((entry) => entry.id === id);
+      return {
+        ...mockClaudeFingerprintSnapshot,
+        current: selected
+          ? {
+              checked_at: new Date().toISOString(),
+              claude_state_path: selected.claude_state_path,
+              stainless_os: selected.stainless_os,
+              stainless_arch: selected.stainless_arch,
+              device_id: selected.device_id,
+              device_id_status: selected.device_id_status,
+              session_id_status: selected.session_id_status,
+              risk_label: selected.risk_label,
+            }
+          : mockClaudeFingerprintSnapshot.current,
+      };
+    }
+    return invoke("restore_claude_fingerprint", { id });
+  },
+
+  async deleteClaudeFingerprintHistory(id: string): Promise<ClaudeFingerprintSnapshot> {
+    if (!inTauri) {
+      return {
+        ...mockClaudeFingerprintSnapshot,
+        history: mockClaudeFingerprintSnapshot.history.filter((entry) => entry.id !== id),
+      };
+    }
+    return invoke("delete_claude_fingerprint_history", { id });
+  },
+
+  async getProxyStatus(): Promise<ProxyStatus> {
+    if (!inTauri) return { running: false, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    return invoke("get_proxy_status");
+  },
+
+  async startProxy(): Promise<ProxyStatus> {
+    if (!inTauri) return { running: true, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    return invoke("start_proxy");
+  },
+
+  async stopProxy(): Promise<ProxyStatus> {
+    if (!inTauri) return { running: false, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    return invoke("stop_proxy");
+  },
+
+  async setProxyTarget(targetOs: string, targetArch: string): Promise<ProxyStatus> {
+    if (!inTauri) return { running: false, listen_port: 15800, target_os: targetOs, target_arch: targetArch, upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    return invoke("set_proxy_target", { targetOs, targetArch });
+  },
+
+  async switchAllFingerprints(): Promise<SwitchAllFingerprintsResult> {
+    if (!inTauri) {
+      const deviceId = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
+      return {
+        fingerprint: {
+          ...mockClaudeFingerprintSnapshot,
+          current: {
+            ...mockClaudeFingerprintSnapshot.current!,
+            checked_at: new Date().toISOString(),
+            device_id: deviceId.slice(0, 64),
+          },
+          history: [
+            {
+              id: `mock-fingerprint-${Date.now()}`,
+              captured_at: new Date().toISOString(),
+              source: "generated",
+              claude_state_path: mockClaudeFingerprintSnapshot.current!.claude_state_path,
+              stainless_os: mockClaudeFingerprintSnapshot.current!.stainless_os,
+              stainless_arch: mockClaudeFingerprintSnapshot.current!.stainless_arch,
+              device_id: deviceId.slice(0, 64),
+              device_id_status: "present",
+              session_id_status: "runtime_generated_by_claude_code",
+              risk_label: mockClaudeFingerprintSnapshot.current!.risk_label,
+            },
+            ...mockClaudeFingerprintSnapshot.history,
+          ],
+        },
+        proxy: { running: true, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null },
+      };
+    }
+    return invoke("switch_all_fingerprints");
   },
 
   async runProbeNow(): Promise<ProbeEvent> {

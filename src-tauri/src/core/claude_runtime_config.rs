@@ -7,7 +7,7 @@ use chrono::Local;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde_json::Value;
 
-use crate::core::types::ClaudeRuntimeConfig;
+use crate::core::{cc_switch_paths, types::ClaudeRuntimeConfig};
 
 pub fn detect_claude_runtime_config() -> ClaudeRuntimeConfig {
     let checked_at = Local::now().to_rfc3339();
@@ -302,8 +302,7 @@ fn detect_cc_switch_secret(errors: &mut Vec<String>) -> Option<SecretCandidate> 
 }
 
 fn current_cc_switch_provider_id(errors: &mut Vec<String>) -> Option<String> {
-    let home = dirs::home_dir()?;
-    let settings_path = home.join(".cc-switch/settings.json");
+    let settings_path = cc_switch_paths::settings_path()?;
     read_json(&settings_path, errors)
         .and_then(|value| {
             value
@@ -315,8 +314,7 @@ fn current_cc_switch_provider_id(errors: &mut Vec<String>) -> Option<String> {
 }
 
 fn open_cc_switch_db(errors: &mut Vec<String>) -> Option<Connection> {
-    let home = dirs::home_dir()?;
-    let db_path = home.join(".cc-switch/cc-switch.db");
+    let db_path = cc_switch_paths::db_path()?;
     if !db_path.exists() {
         return None;
     }

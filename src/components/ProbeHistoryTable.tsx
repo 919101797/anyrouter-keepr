@@ -20,6 +20,7 @@ import { Button } from "./ui/button";
 import { StatusPill } from "./StatusPill";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { api } from "../lib/api";
+import { shortDeviceId } from "../lib/fingerprint";
 import type { ProbeEvent } from "../lib/types";
 import { cn, formatClock, formatDuration, statusLabel } from "../lib/utils";
 
@@ -108,7 +109,7 @@ export function ProbeHistoryTable({ events, filter, onFilter }: ProbeHistoryTabl
         </div>
       </div>
       <div className="max-h-[520px] overflow-auto">
-        <Table className="min-w-[1420px]">
+        <Table className="min-w-[1560px]">
           <TableHeader className="history-table-header sticky top-0 z-10 bg-white">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="history-table-head-row">
@@ -210,6 +211,17 @@ function createColumns(expandedEventId: string | null, toggleExpanded: (eventId:
         </span>
       ),
     }),
+    helper.display({
+      id: "fingerprint",
+      header: "指纹",
+      cell: (info) => (
+        <HistoryTextCell
+          value={fingerprintSummary(info.row.original)}
+          truncated={false}
+          className="mono max-w-[190px]"
+        />
+      ),
+    }),
     helper.accessor("key_summary", {
       header: "KEY",
       cell: (info) => <KeyCell value={info.getValue()} />,
@@ -296,6 +308,16 @@ function EventDetail({ event }: { event: ProbeEvent }) {
         <DetailFact label="模型" value={model} />
         <KeyDetailFact value={keySummary} keySummary={event.key_summary} />
         <DetailFact label="Endpoint" value={endpoint} />
+      </div>
+      <div className="mt-2 grid gap-2 xl:grid-cols-5">
+        <DetailFact label="OS" value={event.fingerprint_os?.trim() || "未记录"} />
+        <DetailFact label="Arch" value={event.fingerprint_arch?.trim() || "未记录"} />
+        <DetailFact label="来源" value={fingerprintSourceLabel(event.fingerprint_source)} />
+        <DetailFact label="session_id" value={fingerprintSessionLabel(event.fingerprint_session_id_status)} />
+        <DetailFact label="context" value={fingerprintContextLabel(event.fingerprint_context_management)} />
+      </div>
+      <div className="mt-2">
+        <DetailTextBlock label="device_id" value={event.fingerprint_device_id} truncated={false} />
       </div>
       <div className="mt-2 grid gap-2 xl:grid-cols-3">
         <DetailTextBlock label="输入" value={event.prompt_summary} truncated={event.prompt_truncated} />
@@ -439,6 +461,45 @@ function outputSummary(event: ProbeEvent) {
   if (stdout) return stdout;
   if (stderr) return stderr;
   return "";
+}
+
+function fingerprintSummary(event: ProbeEvent) {
+  const os = event.fingerprint_os?.trim();
+  const arch = event.fingerprint_arch?.trim();
+  const deviceId = event.fingerprint_device_id?.trim();
+  if (!os && !arch && !deviceId) return "";
+  return `${os || "?"}/${arch || "?"} · ${shortDeviceId(deviceId)}`;
+}
+
+function fingerprintSourceLabel(value?: string | null) {
+  switch (value) {
+    case "proxy":
+      return "指纹代理";
+    case "local":
+      return "本机 Claude";
+    default:
+      return value?.trim() || "未记录";
+  }
+}
+
+function fingerprintSessionLabel(value?: string | null) {
+  switch (value) {
+    case "runtime_generated_by_claude_code":
+      return "运行时一致";
+    default:
+      return value?.trim() || "未记录";
+  }
+}
+
+function fingerprintContextLabel(value?: string | null) {
+  switch (value) {
+    case "proxy_null":
+      return "null（代理剥离）";
+    case "claude_code_controlled":
+      return "Claude Code 控制";
+    default:
+      return value?.trim() || "未记录";
+  }
 }
 
 function HistoryTextCell({

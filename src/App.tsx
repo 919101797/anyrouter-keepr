@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { ActivityHeatmap } from "./components/ActivityHeatmap";
+import { FingerprintPanel } from "./components/FingerprintPanel";
 import { LiquidGlassBackdrop } from "./components/LiquidGlassBackdrop";
 import { ProbeHistoryTable } from "./components/ProbeHistoryTable";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -42,6 +43,7 @@ export default function App() {
     claudeInstallation,
     claudeRuntimeConfig,
     claudeDetectionLogs,
+    claudeFingerprintSnapshot,
     anchorTime,
     autostartEnabled,
     loading,
@@ -59,6 +61,14 @@ export default function App() {
     pauseScheduler,
     setFilter,
     setAutostart,
+    refreshClaudeFingerprint,
+    restoreClaudeFingerprint,
+    deleteClaudeFingerprintHistory,
+    proxyStatus,
+    startProxy,
+    stopProxy,
+    setProxyTarget,
+    switchAllFingerprints,
   } = useAppStore();
   const visibleModel = profile?.model?.trim() || claudeRuntimeConfig?.default_model;
   const runtimeModel = effectiveModelValue(visibleModel, profile?.context_size) || "Claude Code 默认模型";
@@ -134,9 +144,10 @@ export default function App() {
 
             <aside className="app-secondary min-h-0 min-w-0 overflow-visible">
               <Tabs defaultValue="settings">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="settings">设置</TabsTrigger>
                   <TabsTrigger value="runtime">运行参数</TabsTrigger>
+                  <TabsTrigger value="fingerprint">指纹</TabsTrigger>
                 </TabsList>
                 <TabsContent value="settings">
                   <SettingsPanel
@@ -171,6 +182,22 @@ export default function App() {
                     window={formatTimeWindow(profile?.start_time, profile?.end_time)}
                     sleepPrevention={profile?.prevent_sleep ?? true}
                     autostart={autostartEnabled}
+                  />
+                </TabsContent>
+                <TabsContent value="fingerprint">
+                  <FingerprintPanel
+                    snapshot={claudeFingerprintSnapshot}
+                    proxyStatus={proxyStatus}
+                    busy={busy || loading}
+                    error={error}
+                    pendingAction={pendingAction}
+                    onRefresh={refreshClaudeFingerprint}
+                    onRestore={restoreClaudeFingerprint}
+                    onDelete={deleteClaudeFingerprintHistory}
+                    onStartProxy={startProxy}
+                    onStopProxy={stopProxy}
+                    onSetProxyTarget={setProxyTarget}
+                    onSwitchAll={switchAllFingerprints}
                   />
                 </TabsContent>
               </Tabs>

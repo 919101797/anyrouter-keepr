@@ -50,6 +50,13 @@ export interface ProbeEvent {
   stderr_summary?: string | null;
   stdout_truncated: boolean;
   stderr_truncated: boolean;
+  fingerprint_os?: string | null;
+  fingerprint_arch?: string | null;
+  fingerprint_device_id?: string | null;
+  fingerprint_device_id_status?: string | null;
+  fingerprint_session_id_status?: string | null;
+  fingerprint_context_management?: string | null;
+  fingerprint_source?: string | null;
 }
 
 export interface AppStatus {

@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::core::claude_identity::{ClaudeFingerprint, ClaudeFingerprintHistoryEntry};
 use crate::core::types::{
     default_prompt_pool, ActivityBucket, ClaudeDetectionLog, ClaudeInstallation, ProbeEvent,
     ProbeEventDto, ProbeStatus, Profile, StoredProfile,
@@ -110,6 +111,13 @@ impl Database {
               stderr_summary TEXT,
               stdout_truncated INTEGER NOT NULL,
               stderr_truncated INTEGER NOT NULL,
+              fingerprint_os TEXT,
+              fingerprint_arch TEXT,
+              fingerprint_device_id TEXT,
+              fingerprint_device_id_status TEXT,
+              fingerprint_session_id_status TEXT,
+              fingerprint_context_management TEXT,
+              fingerprint_source TEXT,
               created_at TEXT NOT NULL
             );
 
@@ -131,6 +139,23 @@ impl Database {
 
             CREATE INDEX IF NOT EXISTS idx_claude_detection_logs_checked
               ON claude_detection_logs(checked_at DESC);
+
+            CREATE TABLE IF NOT EXISTS claude_fingerprint_history (
+              id TEXT PRIMARY KEY,
+              captured_at TEXT NOT NULL,
+              source TEXT NOT NULL,
+              claude_state_path TEXT NOT NULL,
+              stainless_os TEXT NOT NULL,
+              stainless_arch TEXT NOT NULL,
+              device_id TEXT,
+              device_id_status TEXT NOT NULL,
+              session_id_status TEXT NOT NULL,
+              risk_label TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_claude_fingerprint_history_captured
+              ON claude_fingerprint_history(captured_at DESC);
 
             CREATE TABLE IF NOT EXISTS app_state (
               key TEXT PRIMARY KEY,
@@ -172,6 +197,28 @@ impl Database {
             "prompt_truncated",
             "INTEGER NOT NULL DEFAULT 0",
         )?;
+        add_column_if_missing(&conn, "probe_events", "fingerprint_os", "TEXT")?;
+        add_column_if_missing(&conn, "probe_events", "fingerprint_arch", "TEXT")?;
+        add_column_if_missing(&conn, "probe_events", "fingerprint_device_id", "TEXT")?;
+        add_column_if_missing(
+            &conn,
+            "probe_events",
+            "fingerprint_device_id_status",
+            "TEXT",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "probe_events",
+            "fingerprint_session_id_status",
+            "TEXT",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "probe_events",
+            "fingerprint_context_management",
+            "TEXT",
+        )?;
+        add_column_if_missing(&conn, "probe_events", "fingerprint_source", "TEXT")?;
         add_column_if_missing(
             &conn,
             "profiles",
@@ -405,6 +452,149 @@ impl Database {
         Ok(logs)
     }
 
+    pub fn record_claude_fingerprint(
+        &self,
+        fingerprint: &ClaudeFingerprint,
+        source: &str,
+    ) -> Result<ClaudeFingerprintHistoryEntry, DbError> {
+        let entry = ClaudeFingerprintHistoryEntry {
+            id: Uuid::new_v4().to_string(),
+            captured_at: fingerprint.checked_at.clone(),
+            source: source.to_string(),
+            claude_state_path: fingerprint.claude_state_path.clone(),
+            stainless_os: fingerprint.stainless_os.clone(),
+            stainless_arch: fingerprint.stainless_arch.clone(),
+            device_id: fingerprint.device_id.clone(),
+            device_id_status: fingerprint.device_id_status.clone(),
+            session_id_status: fingerprint.session_id_status.clone(),
+            risk_label: fingerprint.risk_label.clone(),
+        };
+        let conn = self.conn.lock().expect("db mutex poisoned");
+        conn.execute(
+            r#"
+            INSERT INTO claude_fingerprint_history (
+              id, captured_at, source, claude_state_path, stainless_os,
+              stainless_arch, device_id, device_id_status, session_id_status,
+              risk_label, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            "#,
+            params![
+                &entry.id,
+                &entry.captured_at,
+                &entry.source,
+                &entry.claude_state_path,
+                &entry.stainless_os,
+                &entry.stainless_arch,
+                entry.device_id.as_deref(),
+                &entry.device_id_status,
+                &entry.session_id_status,
+                &entry.risk_label,
+                Local::now().to_rfc3339(),
+            ],
+        )?;
+        conn.execute(
+            r#"
+            DELETE FROM claude_fingerprint_history
+            WHERE id IN (
+              SELECT id FROM claude_fingerprint_history
+              ORDER BY captured_at DESC
+              LIMIT -1 OFFSET 200
+            )
+            "#,
+            [],
+        )?;
+        Ok(entry)
+    }
+
+    pub fn list_claude_fingerprint_history(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<ClaudeFingerprintHistoryEntry>, DbError> {
+        let conn = self.conn.lock().expect("db mutex poisoned");
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, captured_at, source, claude_state_path, stainless_os,
+                   stainless_arch, device_id, device_id_status, session_id_status,
+                   risk_label
+            FROM claude_fingerprint_history
+            ORDER BY captured_at DESC
+            LIMIT ?1
+            "#,
+        )?;
+        let rows = stmt.query_map(params![limit.clamp(1, 200)], |row| {
+            Ok(ClaudeFingerprintHistoryEntry {
+                id: row.get(0)?,
+                captured_at: row.get(1)?,
+                source: row.get(2)?,
+                claude_state_path: row.get(3)?,
+                stainless_os: row.get(4)?,
+                stainless_arch: row.get(5)?,
+                device_id: row.get(6)?,
+                device_id_status: row.get(7)?,
+                session_id_status: row.get(8)?,
+                risk_label: row.get(9)?,
+            })
+        })?;
+
+        let mut history = Vec::new();
+        for row in rows {
+            history.push(row?);
+        }
+        Ok(history)
+    }
+
+    pub fn delete_claude_fingerprint_history(&self, id: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().expect("db mutex poisoned");
+        conn.execute(
+            "DELETE FROM claude_fingerprint_history WHERE id = ?1",
+            params![id],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_proxy_target(&self, target_os: &str, target_arch: &str) -> Result<(), DbError> {
+        let conn = self.conn.lock().expect("db mutex poisoned");
+        let now = Local::now().to_rfc3339();
+        let value = serde_json::json!({ "os": target_os, "arch": target_arch }).to_string();
+        conn.execute(
+            r#"
+            INSERT INTO app_state (key, value, updated_at)
+            VALUES ('proxy_target', ?1, ?2)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+            "#,
+            params![value, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_proxy_target(&self) -> Result<(String, String), DbError> {
+        let conn = self.conn.lock().expect("db mutex poisoned");
+        let raw: Option<String> = conn
+            .query_row(
+                "SELECT value FROM app_state WHERE key = 'proxy_target'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match raw {
+            Some(value) => {
+                let parsed: serde_json::Value = serde_json::from_str(&value).unwrap_or_default();
+                let os = parsed
+                    .get("os")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Windows")
+                    .to_string();
+                let arch = parsed
+                    .get("arch")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("x64")
+                    .to_string();
+                Ok((os, arch))
+            }
+            None => Ok((String::from("Windows"), String::from("x64"))),
+        }
+    }
+
     pub fn set_enabled(&self, enabled: bool) -> Result<(), DbError> {
         let mut profile = self.get_runtime_profile()?;
         profile.enabled = enabled;
@@ -445,8 +635,11 @@ impl Database {
                     id, profile_id, started_at, ended_at, duration_ms, status,
                     error_kind, exit_code, base_url, model, key_summary, prompt_summary,
                     prompt_truncated, stdout_summary, stderr_summary,
-                    stdout_truncated, stderr_truncated, created_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+                    stdout_truncated, stderr_truncated, fingerprint_os, fingerprint_arch,
+                    fingerprint_device_id, fingerprint_device_id_status,
+                    fingerprint_session_id_status, fingerprint_context_management,
+                    fingerprint_source, created_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
                 "#,
                 params![
                     event.id,
@@ -466,6 +659,13 @@ impl Database {
                     event.stderr_summary,
                     if event.stdout_truncated { 1 } else { 0 },
                     if event.stderr_truncated { 1 } else { 0 },
+                    event.fingerprint_os,
+                    event.fingerprint_arch,
+                    event.fingerprint_device_id,
+                    event.fingerprint_device_id_status,
+                    event.fingerprint_session_id_status,
+                    event.fingerprint_context_management,
+                    event.fingerprint_source,
                     Local::now().to_rfc3339(),
                 ],
             )?;
@@ -494,7 +694,10 @@ impl Database {
                 r#"
                 SELECT id, profile_id, started_at, ended_at, duration_ms, status, error_kind,
                        exit_code, base_url, model, key_summary, prompt_summary, prompt_truncated,
-                       stdout_summary, stderr_summary, stdout_truncated, stderr_truncated
+                       stdout_summary, stderr_summary, stdout_truncated, stderr_truncated,
+                       fingerprint_os, fingerprint_arch, fingerprint_device_id,
+                       fingerprint_device_id_status, fingerprint_session_id_status,
+                       fingerprint_context_management, fingerprint_source
                 FROM probe_events
                 WHERE profile_id = 'default' AND status = ?1
                 ORDER BY started_at DESC
@@ -510,7 +713,10 @@ impl Database {
                 r#"
                 SELECT id, profile_id, started_at, ended_at, duration_ms, status, error_kind,
                        exit_code, base_url, model, key_summary, prompt_summary, prompt_truncated,
-                       stdout_summary, stderr_summary, stdout_truncated, stderr_truncated
+                       stdout_summary, stderr_summary, stdout_truncated, stderr_truncated,
+                       fingerprint_os, fingerprint_arch, fingerprint_device_id,
+                       fingerprint_device_id_status, fingerprint_session_id_status,
+                       fingerprint_context_management, fingerprint_source
                 FROM probe_events
                 WHERE profile_id = 'default'
                 ORDER BY started_at DESC
@@ -607,7 +813,10 @@ impl Database {
             r#"
             SELECT id, profile_id, started_at, ended_at, duration_ms, status, error_kind,
                    exit_code, base_url, model, key_summary, prompt_summary, prompt_truncated,
-                   stdout_summary, stderr_summary, stdout_truncated, stderr_truncated
+                   stdout_summary, stderr_summary, stdout_truncated, stderr_truncated,
+                   fingerprint_os, fingerprint_arch, fingerprint_device_id,
+                   fingerprint_device_id_status, fingerprint_session_id_status,
+                   fingerprint_context_management, fingerprint_source
             FROM probe_events
             WHERE profile_id = 'default' AND started_at >= ?1
             ORDER BY started_at ASC
@@ -858,6 +1067,13 @@ fn map_event_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProbeEventDto> {
         stderr_summary: row.get(14)?,
         stdout_truncated: row.get::<_, i64>(15)? != 0,
         stderr_truncated: row.get::<_, i64>(16)? != 0,
+        fingerprint_os: row.get(17)?,
+        fingerprint_arch: row.get(18)?,
+        fingerprint_device_id: row.get(19)?,
+        fingerprint_device_id_status: row.get(20)?,
+        fingerprint_session_id_status: row.get(21)?,
+        fingerprint_context_management: row.get(22)?,
+        fingerprint_source: row.get(23)?,
     })
 }
 
@@ -896,6 +1112,15 @@ mod tests {
             stderr_summary: Some(stderr.to_string()),
             stdout_truncated: false,
             stderr_truncated: false,
+            fingerprint_os: Some("Windows".to_string()),
+            fingerprint_arch: Some("x64".to_string()),
+            fingerprint_device_id: Some(
+                "1b750947616d19fc1b8bba20b8024351b1a61012ea72c38b99d33071f4e3a74b".to_string(),
+            ),
+            fingerprint_device_id_status: Some("present".to_string()),
+            fingerprint_session_id_status: Some("runtime_generated_by_claude_code".to_string()),
+            fingerprint_context_management: Some("proxy_null".to_string()),
+            fingerprint_source: Some("proxy".to_string()),
         }
     }
 
@@ -914,6 +1139,16 @@ mod tests {
         assert_eq!(
             events[0].key_summary.as_deref(),
             Some("profile_override · ANTHROPIC_AUTH_TOKEN · sk-...st-key")
+        );
+        assert_eq!(events[0].fingerprint_os.as_deref(), Some("Windows"));
+        assert_eq!(events[0].fingerprint_arch.as_deref(), Some("x64"));
+        assert_eq!(
+            events[0].fingerprint_device_id.as_deref(),
+            Some("1b750947616d19fc1b8bba20b8024351b1a61012ea72c38b99d33071f4e3a74b")
+        );
+        assert_eq!(
+            events[0].fingerprint_context_management.as_deref(),
+            Some("proxy_null")
         );
     }
 
@@ -1071,6 +1306,62 @@ mod tests {
         assert_eq!(logs.len(), 200);
         assert_eq!(logs[0].configured_path, "/tmp/claude-204");
         assert_eq!(logs.last().unwrap().configured_path, "/tmp/claude-5");
+    }
+
+    #[test]
+    fn stores_and_deletes_claude_fingerprint_history() {
+        let db = test_db();
+
+        let first = db
+            .record_claude_fingerprint(
+                &crate::core::claude_identity::ClaudeFingerprint {
+                    checked_at: "2026-07-01T09:00:00+08:00".to_string(),
+                    claude_state_path: "/tmp/.claude.json".to_string(),
+                    stainless_os: "MacOS".to_string(),
+                    stainless_arch: "arm64".to_string(),
+                    device_id: Some(
+                        "5a60043ffe0e04ff78da4ed3ebebbb4aa9e263b5417f595270b1c646534bf421"
+                            .to_string(),
+                    ),
+                    device_id_status: "present".to_string(),
+                    session_id_status: "runtime_generated_by_claude_code".to_string(),
+                    risk_label: "AnyRouter 1M routing key: OS + Arch + device_id".to_string(),
+                },
+                "captured_before_regenerate",
+            )
+            .unwrap();
+        let second = db
+            .record_claude_fingerprint(
+                &crate::core::claude_identity::ClaudeFingerprint {
+                    checked_at: "2026-07-01T09:01:00+08:00".to_string(),
+                    claude_state_path: "/tmp/.claude.json".to_string(),
+                    stainless_os: "Windows".to_string(),
+                    stainless_arch: "x64".to_string(),
+                    device_id: Some(
+                        "1b750947616d19fc1b8bba20b8024351b1a61012ea72c38b99d33071f4e3a74b"
+                            .to_string(),
+                    ),
+                    device_id_status: "present".to_string(),
+                    session_id_status: "runtime_generated_by_claude_code".to_string(),
+                    risk_label: "AnyRouter 1M routing key: OS + Arch + device_id".to_string(),
+                },
+                "generated",
+            )
+            .unwrap();
+
+        let history = db.list_claude_fingerprint_history(10).unwrap();
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].id, second.id);
+        assert_eq!(history[0].source, "generated");
+        assert_eq!(history[0].stainless_os, "Windows");
+        assert_eq!(history[1].id, first.id);
+
+        db.delete_claude_fingerprint_history(&second.id).unwrap();
+        let history = db.list_claude_fingerprint_history(10).unwrap();
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].id, first.id);
     }
 
     #[test]

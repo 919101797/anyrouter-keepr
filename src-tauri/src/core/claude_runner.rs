@@ -12,12 +12,14 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::core::classifier::classify;
+use crate::core::claude_identity::read_claude_fingerprint;
 use crate::core::claude_installation::{apply_claude_command_options, resolve_claude_binary};
 use crate::core::claude_runtime_config::{
     detect_claude_key_summary, detect_claude_runtime_config, summarize_configured_key,
 };
+use crate::core::proxy::ProxyStatus;
 use crate::core::redactor::summarize_and_redact;
-use crate::core::types::{ProbeEvent, ProbeStatus, Profile};
+use crate::core::types::{ProbeEvent, ProbeFingerprint, ProbeStatus, Profile};
 use crate::system::app_log;
 
 const FALLBACK_PROMPT: &str = "只回复 OK";
@@ -25,7 +27,7 @@ const EMPTY_MCP_CONFIG: &[u8] = br#"{"mcpServers":{}}"#;
 const MAX_PROMPT_CHARS: usize = 1_000;
 const MAX_PROMPT_SUMMARY_BYTES: usize = 1_024;
 
-pub async fn run_probe(profile: &Profile) -> ProbeEvent {
+pub async fn run_probe(profile: &Profile, proxy_url: Option<&str>) -> ProbeEvent {
     match resolve_claude_binary(&profile.claude_binary_path).await {
         Ok(resolution) => {
             app_log::info(
@@ -35,12 +37,52 @@ pub async fn run_probe(profile: &Profile) -> ProbeEvent {
                     resolution.source, resolution.effective_path
                 ),
             );
-            run_probe_with_binary(profile, &resolution.effective_path).await
+            run_probe_with_binary(profile, &resolution.effective_path, proxy_url).await
         }
         Err(error) => {
             app_log::error("run_probe.resolve_claude", &error.message);
             claude_not_found_event(profile, &error.message)
         }
+    }
+}
+
+pub fn build_probe_fingerprint(proxy_status: Option<&ProxyStatus>) -> ProbeFingerprint {
+    let local = read_claude_fingerprint().ok();
+    let proxy_running = proxy_status.map(|status| status.running).unwrap_or(false);
+    let effective_os = if proxy_running {
+        proxy_status.map(|status| status.target_os.clone())
+    } else {
+        local
+            .as_ref()
+            .map(|fingerprint| fingerprint.stainless_os.clone())
+    };
+    let effective_arch = if proxy_running {
+        proxy_status.map(|status| status.target_arch.clone())
+    } else {
+        local
+            .as_ref()
+            .map(|fingerprint| fingerprint.stainless_arch.clone())
+    };
+
+    ProbeFingerprint {
+        os: effective_os,
+        arch: effective_arch,
+        device_id: local
+            .as_ref()
+            .and_then(|fingerprint| fingerprint.device_id.clone()),
+        device_id_status: local
+            .as_ref()
+            .map(|fingerprint| fingerprint.device_id_status.clone()),
+        session_id_status: Some("runtime_generated_by_claude_code".to_string()),
+        context_management: Some(
+            if proxy_running {
+                "proxy_null"
+            } else {
+                "claude_code_controlled"
+            }
+            .to_string(),
+        ),
+        source: Some(if proxy_running { "proxy" } else { "local" }.to_string()),
     }
 }
 
@@ -61,7 +103,11 @@ pub fn claude_not_found_event(profile: &Profile, message: &str) -> ProbeEvent {
     )
 }
 
-async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
+async fn run_probe_with_binary(
+    profile: &Profile,
+    binary: &str,
+    proxy_url: Option<&str>,
+) -> ProbeEvent {
     let started_at = Local::now();
     let token = profile.token.clone().unwrap_or_default();
     let token = token.trim();
@@ -102,6 +148,7 @@ async fn run_probe_with_binary(profile: &Profile, binary: &str) -> ProbeEvent {
             key_summary.clone(),
             &probe_prompt,
             mode,
+            proxy_url,
         )
         .await;
 
@@ -130,23 +177,25 @@ async fn run_probe_attempt(
     key_summary: Option<String>,
     probe_prompt: &str,
     mode: ProbeCommandMode,
+    proxy_url: Option<&str>,
 ) -> ProbeEvent {
     let started_at = Local::now();
-    let mut probe_command = match build_command(profile, binary, token, effective_model, mode) {
-        Ok(command) => command,
-        Err(err) => {
-            app_log::error("run_probe.build_command", err.to_string());
-            return config_error_event(
-                profile,
-                started_at,
-                effective_model,
-                key_summary,
-                probe_prompt,
-                "mcp_config_error",
-                &err.to_string(),
-            );
-        }
-    };
+    let mut probe_command =
+        match build_command(profile, binary, token, effective_model, mode, proxy_url) {
+            Ok(command) => command,
+            Err(err) => {
+                app_log::error("run_probe.build_command", err.to_string());
+                return config_error_event(
+                    profile,
+                    started_at,
+                    effective_model,
+                    key_summary,
+                    probe_prompt,
+                    "mcp_config_error",
+                    &err.to_string(),
+                );
+            }
+        };
 
     let mut child = match probe_command.spawn() {
         Ok(child) => child,
@@ -172,6 +221,13 @@ async fn run_probe_attempt(
                 stderr_summary: Some(err.to_string()),
                 stdout_truncated: false,
                 stderr_truncated: false,
+                fingerprint_os: None,
+                fingerprint_arch: None,
+                fingerprint_device_id: None,
+                fingerprint_device_id_status: None,
+                fingerprint_session_id_status: None,
+                fingerprint_context_management: None,
+                fingerprint_source: None,
             };
         }
     };
@@ -350,6 +406,7 @@ fn build_command(
     token: &str,
     effective_model: Option<&str>,
     mode: ProbeCommandMode,
+    proxy_url: Option<&str>,
 ) -> io::Result<ProbeCommand> {
     let mut command = Command::new(binary);
     apply_claude_command_options(&mut command, binary);
@@ -387,7 +444,9 @@ fn build_command(
     if let Some(effort) = normalized_effort(&profile.effort) {
         command.arg("--effort").arg(effort);
     }
-    if !profile.base_url.trim().is_empty() {
+    if let Some(url) = proxy_url {
+        command.env("ANTHROPIC_BASE_URL", url);
+    } else if !profile.base_url.trim().is_empty() {
         command.env("ANTHROPIC_BASE_URL", profile.base_url.trim());
     }
     if !token.is_empty() {
@@ -541,6 +600,13 @@ fn config_error_event(
         stderr_summary: Some(message.to_string()),
         stdout_truncated: false,
         stderr_truncated: false,
+        fingerprint_os: None,
+        fingerprint_arch: None,
+        fingerprint_device_id: None,
+        fingerprint_device_id_status: None,
+        fingerprint_session_id_status: None,
+        fingerprint_context_management: None,
+        fingerprint_source: None,
     }
 }
 
@@ -606,6 +672,13 @@ fn event_from_output(
         stderr_summary,
         stdout_truncated,
         stderr_truncated,
+        fingerprint_os: None,
+        fingerprint_arch: None,
+        fingerprint_device_id: None,
+        fingerprint_device_id_status: None,
+        fingerprint_session_id_status: None,
+        fingerprint_context_management: None,
+        fingerprint_source: None,
     }
 }
 
@@ -626,7 +699,8 @@ mod tests {
     async fn missing_token_still_uses_claude_code_existing_config() {
         let profile = Profile::default();
 
-        let event = run_probe_with_binary(&profile, "definitely-missing-claude-test-binary").await;
+        let event =
+            run_probe_with_binary(&profile, "definitely-missing-claude-test-binary", None).await;
 
         assert_eq!(event.status, ProbeStatus::ConfigError);
         assert_eq!(event.error_kind.as_deref(), Some("claude_not_found"));
@@ -640,7 +714,8 @@ mod tests {
             ..Profile::default()
         };
 
-        let event = run_probe_with_binary(&profile, "definitely-missing-claude-test-binary").await;
+        let event =
+            run_probe_with_binary(&profile, "definitely-missing-claude-test-binary", None).await;
 
         assert_eq!(event.status, ProbeStatus::ConfigError);
         assert_eq!(event.error_kind.as_deref(), Some("claude_not_found"));
@@ -654,7 +729,8 @@ mod tests {
             ..Profile::default()
         };
 
-        let event = run_probe_with_binary(&profile, "definitely-missing-claude-test-binary").await;
+        let event =
+            run_probe_with_binary(&profile, "definitely-missing-claude-test-binary", None).await;
 
         assert_eq!(event.status, ProbeStatus::ConfigError);
         assert_eq!(event.error_kind.as_deref(), Some("claude_not_found"));
@@ -820,7 +896,7 @@ printf '{{"result":"OK"}}'
         };
 
         let event =
-            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path"), None).await;
         let args = std::fs::read_to_string(&capture_path).expect("read captured args");
 
         assert_eq!(event.status, ProbeStatus::Success);
@@ -876,7 +952,7 @@ printf '{{"result":"OK"}}'
         };
 
         let event =
-            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path"), None).await;
         let args = std::fs::read_to_string(&capture_path).expect("read captured args");
         let attempts = args
             .split("---\n")
@@ -931,7 +1007,7 @@ printf '{{"result":"OK"}}'
         };
 
         let event =
-            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path"), None).await;
         let stdin = std::fs::read_to_string(&capture_path).expect("read captured stdin");
 
         assert_eq!(event.status, ProbeStatus::Success);
@@ -971,7 +1047,7 @@ exit 1
 
         let started = std::time::Instant::now();
         let event =
-            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path"), None).await;
 
         assert!(started.elapsed() >= StdDuration::from_secs(1));
         assert_eq!(event.status, ProbeStatus::QueueMiss);
@@ -1016,7 +1092,7 @@ exit 1
         };
 
         let event =
-            run_probe_with_binary(&profile, script_path.to_str().expect("script path")).await;
+            run_probe_with_binary(&profile, script_path.to_str().expect("script path"), None).await;
 
         assert_eq!(event.status, ProbeStatus::QueueMiss);
         assert_eq!(event.error_kind.as_deref(), Some("429"));
@@ -1030,7 +1106,8 @@ exit 1
             ..test_profile()
         };
 
-        let event = run_probe_with_binary(&profile, "definitely-missing-claude-test-binary").await;
+        let event =
+            run_probe_with_binary(&profile, "definitely-missing-claude-test-binary", None).await;
 
         assert_eq!(event.status, ProbeStatus::ConfigError);
         assert_eq!(event.error_kind.as_deref(), Some("invalid_token_kind"));
@@ -1044,7 +1121,8 @@ exit 1
             ..Profile::default()
         };
 
-        let event = run_probe_with_binary(&profile, "definitely-missing-claude-test-binary").await;
+        let event =
+            run_probe_with_binary(&profile, "definitely-missing-claude-test-binary", None).await;
 
         assert_eq!(event.status, ProbeStatus::ConfigError);
         assert_eq!(event.error_kind.as_deref(), Some("claude_not_found"));
@@ -1058,7 +1136,7 @@ exit 1
             ..Profile::default()
         };
 
-        let event = run_probe(&profile).await;
+        let event = run_probe(&profile, None).await;
 
         assert_eq!(event.status, ProbeStatus::ConfigError);
         assert_eq!(event.error_kind.as_deref(), Some("claude_not_found"));
@@ -1082,7 +1160,7 @@ exit 1
             ..Profile::default()
         };
 
-        let event = run_probe(&profile).await;
+        let event = run_probe(&profile, None).await;
 
         assert!(
             matches!(

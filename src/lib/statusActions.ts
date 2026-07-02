@@ -6,6 +6,10 @@ export type StatusPendingAction =
   | "start"
   | "pause"
   | "autostart"
+  | "fingerprint"
+  | "fingerprint_refresh"
+  | "proxy"
+  | "proxy_target"
   | null;
 
 export interface StatusActionViewInput {

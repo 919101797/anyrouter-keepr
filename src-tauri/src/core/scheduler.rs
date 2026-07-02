@@ -8,7 +8,8 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 
 use crate::core::claude_installation::resolve_claude_binary;
-use crate::core::claude_runner::{claude_not_found_event, run_probe};
+use crate::core::claude_runner::{build_probe_fingerprint, claude_not_found_event, run_probe};
+use crate::core::proxy::ProxyHandle;
 use crate::core::time_window::{seconds_until, TimeWindow};
 use crate::core::types::{AppStatus, ProbeEventDto, ProbeStatus};
 use crate::storage::db::Database;
@@ -25,6 +26,7 @@ pub struct RuntimeStatus {
 
 pub struct SchedulerHandle {
     db: Arc<Database>,
+    proxy: Arc<tokio::sync::Mutex<ProxyHandle>>,
     task: Option<JoinHandle<()>>,
     stop_tx: Option<oneshot::Sender<()>>,
     runtime_status: Arc<StdMutex<RuntimeStatus>>,
@@ -32,9 +34,10 @@ pub struct SchedulerHandle {
 }
 
 impl SchedulerHandle {
-    pub fn new(db: Arc<Database>) -> Self {
+    pub fn new(db: Arc<Database>, proxy: Arc<tokio::sync::Mutex<ProxyHandle>>) -> Self {
         Self {
             db,
+            proxy,
             task: None,
             stop_tx: None,
             runtime_status: Arc::new(StdMutex::new(RuntimeStatus {
@@ -77,9 +80,14 @@ impl SchedulerHandle {
                     "scheduler.start.resolve_claude",
                     format!("{}; scheduler will keep retrying", error.message),
                 );
-                let _ = self
-                    .db
-                    .push_event(claude_not_found_event(&profile, &error.message));
+                let fingerprint = {
+                    let proxy = self.proxy.lock().await;
+                    let status = proxy.status();
+                    build_probe_fingerprint(Some(&status))
+                };
+                let mut event = claude_not_found_event(&profile, &error.message);
+                event.attach_fingerprint(fingerprint);
+                let _ = self.db.push_event(event);
                 let _ = self.db.flush_buffer();
             }
         }
@@ -87,6 +95,7 @@ impl SchedulerHandle {
         self.db.set_enabled(true).map_err(|err| err.to_string())?;
         let (tx, mut rx) = oneshot::channel();
         let db = self.db.clone();
+        let proxy = self.proxy.clone();
         let runtime_status = self.runtime_status.clone();
         let sleep_prevention = self.sleep_prevention.clone();
         self.stop_tx = Some(tx);
@@ -161,12 +170,18 @@ impl SchedulerHandle {
                     status.next_probe_at = None;
                 });
 
-                let event = tokio::select! {
-                    event = run_probe(&profile) => event,
+                let (proxy_url, fingerprint) = {
+                    let proxy = proxy.lock().await;
+                    let status = proxy.status();
+                    (proxy.proxy_url(), build_probe_fingerprint(Some(&status)))
+                };
+                let mut event = tokio::select! {
+                    event = run_probe(&profile, proxy_url.as_deref()) => event,
                     _ = &mut rx => {
                         break "stop_signal".to_string();
                     },
                 };
+                event.attach_fingerprint(fingerprint);
                 app_log::info(
                     "scheduler.probe",
                     format!(
@@ -366,6 +381,7 @@ mod tests {
     use tokio::time::{sleep, Duration};
 
     use super::*;
+    use crate::core::proxy::ProxyConfig;
     use crate::core::types::Profile;
 
     fn live_tests_enabled() -> bool {
@@ -393,7 +409,11 @@ mod tests {
         })
         .expect("save profile");
 
-        let mut scheduler = SchedulerHandle::new(db.clone());
+        let proxy = Arc::new(tokio::sync::Mutex::new(ProxyHandle::new(
+            ProxyConfig::default(),
+            15800,
+        )));
+        let mut scheduler = SchedulerHandle::new(db.clone(), proxy);
         let result = scheduler.start().await;
 
         assert!(result.is_ok());
@@ -438,7 +458,11 @@ mod tests {
         })
         .expect("save profile");
 
-        let mut scheduler = SchedulerHandle::new(db);
+        let proxy = Arc::new(tokio::sync::Mutex::new(ProxyHandle::new(
+            ProxyConfig::default(),
+            15800,
+        )));
+        let mut scheduler = SchedulerHandle::new(db, proxy);
         scheduler.start().await.expect("start scheduler");
         for _ in 0..50 {
             if scheduler.runtime_status().current_state == "probing" {
@@ -483,7 +507,11 @@ mod tests {
         })
         .expect("save profile");
 
-        let mut scheduler = SchedulerHandle::new(db.clone());
+        let proxy = Arc::new(tokio::sync::Mutex::new(ProxyHandle::new(
+            ProxyConfig::default(),
+            15800,
+        )));
+        let mut scheduler = SchedulerHandle::new(db.clone(), proxy);
         scheduler.start().await.expect("start scheduler");
         sleep(Duration::from_millis(250)).await;
         assert!(scheduler.runtime_status().running);
@@ -530,6 +558,13 @@ mod tests {
                 stderr_summary: None,
                 stdout_truncated: false,
                 stderr_truncated: false,
+                fingerprint_os: None,
+                fingerprint_arch: None,
+                fingerprint_device_id: None,
+                fingerprint_device_id_status: None,
+                fingerprint_session_id_status: None,
+                fingerprint_context_management: None,
+                fingerprint_source: None,
             }),
             None,
             0,

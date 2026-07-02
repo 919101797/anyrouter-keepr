@@ -1,7 +1,11 @@
+pub mod cc_switch_paths;
 pub mod classifier;
+pub mod claude_identity;
 pub mod claude_installation;
 pub mod claude_runner;
 pub mod claude_runtime_config;
+pub mod direct_claude_route;
+pub mod proxy;
 pub mod redactor;
 pub mod scheduler;
 pub mod time_window;

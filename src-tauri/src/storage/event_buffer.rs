@@ -102,6 +102,13 @@ mod tests {
             stderr_summary: Some(stderr.to_string()),
             stdout_truncated: false,
             stderr_truncated: false,
+            fingerprint_os: None,
+            fingerprint_arch: None,
+            fingerprint_device_id: None,
+            fingerprint_device_id_status: None,
+            fingerprint_session_id_status: None,
+            fingerprint_context_management: None,
+            fingerprint_source: None,
         }
     }
 
