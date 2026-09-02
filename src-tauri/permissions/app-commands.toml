@@ -16,6 +16,7 @@ commands.allow = [
   "get_claude_installation",
   "get_claude_key_value",
   "get_claude_runtime_config",
+  "get_upstream_models",
   "refresh_claude_installation",
   "test_claude_installation",
   "list_claude_detection_logs",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatBytes,
+  formatUpdateDetails,
   normalizeUpdaterError,
   reduceDownloadProgress,
   type ProgressAccumulator,
@@ -56,6 +57,22 @@ describe("updater progress reducer", () => {
     expect(formatBytes()).toBe("未知大小");
     expect(formatBytes(2048)).toBe("2.0 KB");
     expect(formatBytes(2 * 1024 * 1024)).toBe("2.0 MB");
+  });
+
+  it("keeps only product-facing update details", () => {
+    const details = formatUpdateDetails(`
+## 更新说明
+- 优化模型选择体验
+- [修复更新流程](https://github.com/example/repo/pull/1)
+Full Changelog: https://github.com/example/repo/compare/v1...v2
+`);
+
+    expect(details).toBe("- 优化模型选择体验\n- 修复更新流程");
+    expect(details).not.toMatch(/github|https?:\/\//i);
+  });
+
+  it("shows a concise empty update detail", () => {
+    expect(formatUpdateDetails()).toBe("暂无更新详情");
   });
 
   it("normalizes inaccessible update metadata", () => {

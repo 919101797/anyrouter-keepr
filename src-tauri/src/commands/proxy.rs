@@ -37,7 +37,7 @@ pub async fn start_proxy(state: State<'_, AppState>) -> Result<ProxyStatus, Stri
     proxy.start().await?;
     let direct_route = sync_direct_claude_route(DEFAULT_PROXY_PORT);
     if let Some(error) = direct_route.error.as_deref() {
-        crate::system::app_log::error("proxy.direct_route", error.to_string());
+        crate::system::app_log::error("proxy.direct_route", error);
     }
 
     crate::system::app_log::info(
@@ -64,7 +64,7 @@ pub async fn stop_proxy(state: State<'_, AppState>) -> Result<ProxyStatus, Strin
     proxy.stop();
     let direct_route = disable_direct_claude_route(DEFAULT_PROXY_PORT);
     if let Some(error) = direct_route.error.as_deref() {
-        crate::system::app_log::error("proxy.direct_route_restore", error.to_string());
+        crate::system::app_log::error("proxy.direct_route_restore", error);
     }
     let mut status = proxy.status();
     status.error = direct_route.error;

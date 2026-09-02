@@ -2,12 +2,10 @@ import { useMemo, useState } from "react";
 import type { ComponentProps, ComponentType, KeyboardEvent, ReactNode } from "react";
 import { CircleAlert, RefreshCw, Save, X } from "lucide-react";
 import {
-  CLAUDE_MODEL_OPTIONS,
   CONTEXT_SIZE_OPTIONS,
   CUSTOM_MODEL_VALUE,
+  EMPTY_MODEL_OPTIONS_VALUE,
   EFFORT_OPTIONS,
-  modelDisplayName,
-  modelSelectValue,
   runtimeModelSelectValue,
 } from "../lib/modelOptions";
 import {
@@ -31,18 +29,22 @@ import type {
   ClaudeRuntimeConfig,
   ProfileInput,
   StoredProfile,
+  UpstreamModelCatalog,
 } from "../lib/types";
 
 interface SettingsPanelProps {
   profile: StoredProfile | null;
   claudeInstallation: ClaudeInstallation | null;
   claudeRuntimeConfig: ClaudeRuntimeConfig | null;
+  upstreamModelCatalog: UpstreamModelCatalog | null;
+  upstreamModelsLoading: boolean;
   claudeDetectionLogs: ClaudeDetectionLog[];
   busy: boolean;
   pendingAction?: StatusPendingAction;
   autostartEnabled: boolean;
   onSave: (profile: ProfileInput) => void;
   onRefreshClaudeInstallation: () => void;
+  onRefreshUpstreamModels: () => void;
   onTestClaudeInstallation: (configuredPath: string) => void;
   onAutostartChange: (enabled: boolean) => void;
 }
@@ -51,12 +53,15 @@ export function SettingsPanel({
   profile,
   claudeInstallation,
   claudeRuntimeConfig,
+  upstreamModelCatalog,
+  upstreamModelsLoading,
   claudeDetectionLogs,
   busy,
   pendingAction = null,
   autostartEnabled,
   onSave,
   onRefreshClaudeInstallation,
+  onRefreshUpstreamModels,
   onTestClaudeInstallation,
   onAutostartChange,
 }: SettingsPanelProps) {
@@ -94,13 +99,12 @@ export function SettingsPanel({
     [profile],
   );
   const [draft, setDraft] = useState<ProfileInput>(initial);
-  const [customModelMode, setCustomModelMode] = useState(
-    () => modelSelectValue(initial.model) === CUSTOM_MODEL_VALUE,
-  );
+  const [customModelMode, setCustomModelMode] = useState(false);
   const detectedDefaultModel = claudeRuntimeConfig?.default_model?.trim() || "";
+  const upstreamModels = upstreamModelCatalog?.models ?? [];
   const selectedModel = customModelMode
     ? CUSTOM_MODEL_VALUE
-    : runtimeModelSelectValue(draft.model, detectedDefaultModel);
+    : runtimeModelSelectValue(draft.model, detectedDefaultModel, upstreamModels);
   const customModelActive = selectedModel === CUSTOM_MODEL_VALUE;
   const promptTags = normalizePromptTags(draft.prompt_pool);
   const promptPoolCount = promptTags.length;
@@ -263,17 +267,28 @@ export function SettingsPanel({
               </Field>
             </div>
             <div className="grid gap-3 sm:col-span-2 sm:grid-cols-[minmax(0,1fr)_120px_148px]">
-              <Field label="Model">
-                <Select value={selectedModel} onValueChange={updateModelSelect}>
+              <Field label="Model（上游动态）">
+                <Select
+                  value={selectedModel}
+                  onValueChange={updateModelSelect}
+                  onOpenChange={(open) => {
+                    if (open) onRefreshUpstreamModels();
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CLAUDE_MODEL_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {modelDisplayName(option.value)}
+                    {upstreamModels.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.display_name}
                       </SelectItem>
                     ))}
+                    {upstreamModels.length === 0 ? (
+                      <SelectItem value={EMPTY_MODEL_OPTIONS_VALUE} disabled>
+                        {upstreamModelsLoading ? "正在读取上游模型" : "上游未返回模型"}
+                      </SelectItem>
+                    ) : null}
                     <SelectItem value={CUSTOM_MODEL_VALUE}>自定义模型</SelectItem>
                   </SelectContent>
                 </Select>
@@ -322,6 +337,13 @@ export function SettingsPanel({
                     onChange={(event) => update("model", event.target.value)}
                   />
                 </Field>
+              </div>
+            ) : null}
+            {upstreamModelCatalog?.error ? (
+              <div className="sm:col-span-2">
+                <InlineNotice tone="warning" icon={CircleAlert}>
+                  模型列表获取失败：{upstreamModelCatalog.error}。仍可手动填写模型标识。
+                </InlineNotice>
               </div>
             ) : null}
             <div className="grid gap-3 sm:col-span-2">

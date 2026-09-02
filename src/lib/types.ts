@@ -109,6 +109,19 @@ export interface ClaudeRuntimeConfig {
   error?: string | null;
 }
 
+export interface UpstreamModel {
+  id: string;
+  display_name: string;
+}
+
+export interface UpstreamModelCatalog {
+  checked_at: string;
+  upstream_url: string;
+  upstream_source: string;
+  models: UpstreamModel[];
+  error?: string | null;
+}
+
 export interface ClaudeDetectionLog extends ClaudeInstallation {
   id: string;
 }

@@ -1,15 +1,7 @@
-export const CURRENT_MODEL_VALUE = "__current_claude_code__";
-export const CUSTOM_MODEL_VALUE = "__custom_model__";
+import type { UpstreamModel } from "./types";
 
-export const CLAUDE_MODEL_OPTIONS = [
-  { value: "claude-opus-5", label: "Claude Opus 5" },
-  { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
-  { value: "claude-fable-5", label: "Claude Fable 5" },
-  { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
-  { value: "claude-mythos-5", label: "Claude Mythos 5" },
-] as const;
+export const CUSTOM_MODEL_VALUE = "__custom_model__";
+export const EMPTY_MODEL_OPTIONS_VALUE = "__empty_upstream_models__";
 
 export const EFFORT_OPTIONS = [
   { value: "low", label: "Low" },
@@ -24,50 +16,29 @@ export const CONTEXT_SIZE_OPTIONS = [
   { value: "native", label: "原生" },
 ] as const;
 
-export function modelSelectValue(model: string) {
+export function modelSelectValue(model: string, options: UpstreamModel[]) {
   const value = canonicalModelValue(model);
-  if (!value) return CURRENT_MODEL_VALUE;
-  if (CLAUDE_MODEL_OPTIONS.some((option) => option.value === value)) return value;
+  if (options.some((option) => option.id === value)) return value;
   return CUSTOM_MODEL_VALUE;
 }
 
 export function runtimeModelSelectValue(
-  configuredModel?: string | null,
-  detectedDefaultModel?: string | null,
+  configuredModel: string | null | undefined,
+  detectedDefaultModel: string | null | undefined,
+  options: UpstreamModel[],
 ) {
-  const configured = configuredModel?.trim() ?? "";
-  if (configured) return modelSelectValue(configured);
-
-  const detected = canonicalModelValue(detectedDefaultModel);
-  if (!detected) return CUSTOM_MODEL_VALUE;
-
-  return CLAUDE_MODEL_OPTIONS.some((option) => option.value === detected) ? detected : CUSTOM_MODEL_VALUE;
+  const model = configuredModel?.trim() || detectedDefaultModel?.trim() || "";
+  return modelSelectValue(model, options);
 }
 
 export function canonicalModelValue(model?: string | null) {
-  const value = model?.trim().replace(/\[[^\]]+\]$/, "") ?? "";
-  if (!value) return "";
-
-  const exact = CLAUDE_MODEL_OPTIONS.find((option) => option.value === value);
-  if (exact) return exact.value;
-
-  const dated = value.replace(/-\d{8}$/, "");
-  const datedMatch = CLAUDE_MODEL_OPTIONS.find((option) => option.value === dated);
-  if (datedMatch) return datedMatch.value;
-
-  return value;
+  return model?.trim().replace(/\[[^\]]+\]$/, "") ?? "";
 }
 
-export function modelDisplayName(model?: string | null) {
+export function modelDisplayName(model: string | null | undefined, options: UpstreamModel[]) {
   const value = canonicalModelValue(model);
   if (!value) return "";
-
-  return CLAUDE_MODEL_OPTIONS.find((option) => option.value === value)?.label ?? value;
-}
-
-export function defaultModelLabel(model?: string | null) {
-  const displayName = modelDisplayName(model);
-  return displayName ? `默认：${displayName}` : "未识别模型";
+  return options.find((option) => option.id === value)?.display_name ?? value;
 }
 
 export function effectiveModelValue(model?: string | null, contextSize?: string | null) {

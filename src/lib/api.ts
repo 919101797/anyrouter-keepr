@@ -9,6 +9,7 @@ import type {
   ProbeEvent,
   ProfileInput,
   StoredProfile,
+  UpstreamModelCatalog,
 } from "./types";
 import type { ClaudeFingerprintSnapshot, ProxyStatus } from "./fingerprint";
 import { DEFAULT_PROMPT_TAGS } from "./promptTags";
@@ -110,6 +111,17 @@ const mockClaudeRuntimeConfig: ClaudeRuntimeConfig = {
   error: null,
 };
 
+const mockUpstreamModelCatalog: UpstreamModelCatalog = {
+  checked_at: new Date().toISOString(),
+  upstream_url: "https://anyrouter.top",
+  upstream_source: "cc_switch:mock",
+  models: [
+    { id: "claude-opus-4-8", display_name: "Claude Opus 4.8" },
+    { id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6" },
+  ],
+  error: null,
+};
+
 const mockClaudeDetectionLogs: ClaudeDetectionLog[] = [
   {
     id: "mock-claude-log-1",
@@ -177,6 +189,11 @@ export const api = {
   async getClaudeRuntimeConfig(): Promise<ClaudeRuntimeConfig> {
     if (!inTauri) return mockClaudeRuntimeConfig;
     return invoke("get_claude_runtime_config");
+  },
+
+  async getUpstreamModels(): Promise<UpstreamModelCatalog> {
+    if (!inTauri) return { ...mockUpstreamModelCatalog, checked_at: new Date().toISOString() };
+    return invoke("get_upstream_models");
   },
 
   async getClaudeKeyValue(keySummary?: string | null): Promise<string | null> {

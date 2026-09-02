@@ -10,3 +10,4 @@ pub mod redactor;
 pub mod scheduler;
 pub mod time_window;
 pub mod types;
+pub mod upstream_models;

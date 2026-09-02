@@ -1,9 +1,17 @@
 use tauri::State;
 
 use crate::core::claude_installation::detect_claude_installation;
-use crate::core::claude_runtime_config::{detect_claude_runtime_config, resolve_claude_key_value};
-use crate::core::types::{ClaudeDetectionLog, ClaudeInstallation, ClaudeRuntimeConfig};
+use crate::core::claude_runtime_config::{
+    detect_claude_runtime_config, resolve_claude_credential, resolve_claude_key_value,
+};
+use crate::core::direct_claude_route::{resolve_proxy_upstream_url, should_follow_cc_switch};
+use crate::core::types::{
+    ClaudeDetectionLog, ClaudeInstallation, ClaudeRuntimeConfig, UpstreamModelCatalog,
+};
+use crate::core::upstream_models::fetch_upstream_models;
 use crate::AppState;
+
+const DEFAULT_PROXY_PORT: u16 = 15800;
 
 #[tauri::command]
 pub async fn get_claude_installation(
@@ -63,4 +71,37 @@ pub async fn get_claude_key_value(
         &profile.token_kind,
         profile.token.as_deref().unwrap_or_default(),
     ))
+}
+
+#[tauri::command]
+pub async fn get_upstream_models(
+    state: State<'_, AppState>,
+) -> Result<UpstreamModelCatalog, String> {
+    let profile = state
+        .db
+        .get_runtime_profile()
+        .map_err(|err| err.to_string())?;
+    let proxy_status = {
+        let proxy = state.proxy.lock().await;
+        proxy.status()
+    };
+    let follow_cc_switch = should_follow_cc_switch(&profile.base_url, DEFAULT_PROXY_PORT);
+    let upstream = resolve_proxy_upstream_url(
+        &profile.base_url,
+        &proxy_status.upstream_url,
+        follow_cc_switch,
+        DEFAULT_PROXY_PORT,
+    );
+    let credential = resolve_claude_credential(
+        None,
+        &profile.token_kind,
+        profile.token.as_deref().unwrap_or_default(),
+    );
+
+    Ok(fetch_upstream_models(
+        &upstream.upstream_url,
+        &upstream.source,
+        credential.as_ref(),
+    )
+    .await)
 }

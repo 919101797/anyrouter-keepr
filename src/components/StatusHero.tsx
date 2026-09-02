@@ -6,9 +6,9 @@ import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { StatusPill } from "./StatusPill";
 import {
-  CLAUDE_MODEL_OPTIONS,
   CONTEXT_SIZE_OPTIONS,
   CUSTOM_MODEL_VALUE,
+  EMPTY_MODEL_OPTIONS_VALUE,
   EFFORT_OPTIONS,
   modelDisplayName,
   runtimeModelSelectValue,
@@ -16,13 +16,21 @@ import {
 import { getStatusActionView, type StatusPendingAction } from "../lib/statusActions";
 import { formatTimeWindow, isAllDayWindow } from "../lib/timeWindow";
 import { formatClock, formatRelativeTime } from "../lib/utils";
-import type { AppStatus, ClaudeInstallation, ProfileInput, StoredProfile } from "../lib/types";
+import type {
+  AppStatus,
+  ClaudeInstallation,
+  ProfileInput,
+  StoredProfile,
+  UpstreamModelCatalog,
+} from "../lib/types";
 import type { ClaudeRuntimeConfig } from "../lib/types";
 
 interface StatusHeroProps {
   profile: StoredProfile | null;
   claudeInstallation: ClaudeInstallation | null;
   claudeRuntimeConfig: ClaudeRuntimeConfig | null;
+  upstreamModelCatalog: UpstreamModelCatalog | null;
+  upstreamModelsLoading: boolean;
   status: AppStatus | null;
   busy: boolean;
   pendingAction?: StatusPendingAction;
@@ -30,6 +38,7 @@ interface StatusHeroProps {
   onPause: () => void;
   onProbe: () => void;
   onSaveProfile: (profile: ProfileInput) => Promise<void>;
+  onRefreshUpstreamModels: () => void;
 }
 
 const statusTone = {
@@ -63,6 +72,8 @@ export function StatusHero({
   profile,
   claudeInstallation,
   claudeRuntimeConfig,
+  upstreamModelCatalog,
+  upstreamModelsLoading,
   status,
   busy,
   pendingAction = null,
@@ -70,6 +81,7 @@ export function StatusHero({
   onPause,
   onProbe,
   onSaveProfile,
+  onRefreshUpstreamModels,
 }: StatusHeroProps) {
   const [customModelOpen, setCustomModelOpen] = useState(false);
   const [customModelDraft, setCustomModelDraft] = useState("");
@@ -109,8 +121,13 @@ export function StatusHero({
                 : "守护已暂停";
   const detectedDefaultModel = claudeRuntimeConfig?.default_model?.trim() || "";
   const profileModel = profile?.model?.trim() || "";
-  const modelChoice = runtimeModelSelectValue(profileModel, detectedDefaultModel);
-  const modelSelectLabel = modelChoice === CUSTOM_MODEL_VALUE ? profileModel || "自定义模型" : "自定义模型";
+  const upstreamModels = upstreamModelCatalog?.models ?? [];
+  const modelChoice = runtimeModelSelectValue(profileModel, detectedDefaultModel, upstreamModels);
+  const selectedCustomModel = profileModel || detectedDefaultModel;
+  const modelSelectLabel =
+    modelChoice === CUSTOM_MODEL_VALUE && selectedCustomModel
+      ? modelDisplayName(selectedCustomModel, upstreamModels)
+      : "自定义模型";
   const contextChoice = normalizedContext(profile?.context_size);
   const effortChoice = normalizedEffort(profile?.effort);
 
@@ -124,7 +141,7 @@ export function StatusHero({
 
   const changeModel = (value: string) => {
     if (value === CUSTOM_MODEL_VALUE) {
-      setCustomModelDraft(modelChoice === CUSTOM_MODEL_VALUE ? (profile?.model ?? "") : "");
+      setCustomModelDraft(modelChoice === CUSTOM_MODEL_VALUE ? selectedCustomModel : "");
       setCustomModelOpen(true);
       return;
     }
@@ -163,12 +180,20 @@ export function StatusHero({
                     disabled={busy || !profile}
                     className="w-[clamp(156px,18vw,220px)]"
                     onValueChange={changeModel}
+                    onOpenChange={(open) => {
+                      if (open) onRefreshUpstreamModels();
+                    }}
                   >
-                    {CLAUDE_MODEL_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {modelDisplayName(option.value)}
+                    {upstreamModels.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.display_name}
                       </SelectItem>
                     ))}
+                    {upstreamModels.length === 0 ? (
+                      <SelectItem value={EMPTY_MODEL_OPTIONS_VALUE} disabled>
+                        {upstreamModelsLoading ? "正在读取上游模型" : "上游未返回模型"}
+                      </SelectItem>
+                    ) : null}
                     <SelectItem value={CUSTOM_MODEL_VALUE}>{modelSelectLabel}</SelectItem>
                   </InlineSelect>
                   <InlineSelect
@@ -301,15 +326,17 @@ function InlineSelect({
   className,
   children,
   onValueChange,
+  onOpenChange,
 }: {
   value: string;
   disabled: boolean;
   className?: string;
   children: ReactNode;
   onValueChange: (value: string) => void;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <Select value={value} disabled={disabled} onValueChange={onValueChange}>
+    <Select value={value} disabled={disabled} onValueChange={onValueChange} onOpenChange={onOpenChange}>
       <SelectTrigger
         className={`status-hero-inline-select mono h-8 px-2 py-1 text-xs font-semibold shadow-none [&>span]:truncate ${className ?? ""}`}
       >

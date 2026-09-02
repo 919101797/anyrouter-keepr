@@ -42,6 +42,8 @@ export default function App() {
     activity,
     claudeInstallation,
     claudeRuntimeConfig,
+    upstreamModelCatalog,
+    upstreamModelsLoading,
     claudeDetectionLogs,
     claudeFingerprintSnapshot,
     anchorTime,
@@ -55,6 +57,7 @@ export default function App() {
     refreshStatus,
     saveProfile,
     refreshClaudeInstallation,
+    refreshUpstreamModels,
     testClaudeInstallation,
     runProbeNow,
     startScheduler,
@@ -129,6 +132,8 @@ export default function App() {
                 profile={profile}
                 claudeInstallation={claudeInstallation}
                 claudeRuntimeConfig={claudeRuntimeConfig}
+                upstreamModelCatalog={upstreamModelCatalog}
+                upstreamModelsLoading={upstreamModelsLoading}
                 status={status}
                 busy={busy || loading}
                 pendingAction={pendingAction}
@@ -136,6 +141,7 @@ export default function App() {
                 onPause={pauseScheduler}
                 onProbe={runProbeNow}
                 onSaveProfile={saveProfile}
+                onRefreshUpstreamModels={refreshUpstreamModels}
               />
               <StatStrip status={status} events={events} />
               <ActivityHeatmap buckets={activity} anchorTime={anchorTime} />
@@ -155,12 +161,15 @@ export default function App() {
                     profile={profile}
                     claudeInstallation={claudeInstallation}
                     claudeRuntimeConfig={claudeRuntimeConfig}
+                    upstreamModelCatalog={upstreamModelCatalog}
+                    upstreamModelsLoading={upstreamModelsLoading}
                     claudeDetectionLogs={claudeDetectionLogs}
                     busy={busy || loading}
                     pendingAction={pendingAction}
                     autostartEnabled={autostartEnabled}
                     onSave={saveProfile}
                     onRefreshClaudeInstallation={refreshClaudeInstallation}
+                    onRefreshUpstreamModels={refreshUpstreamModels}
                     onTestClaudeInstallation={testClaudeInstallation}
                     onAutostartChange={setAutostart}
                   />

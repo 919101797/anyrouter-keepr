@@ -11,6 +11,7 @@ import type {
   ProbeEvent,
   ProfileInput,
   StoredProfile,
+  UpstreamModelCatalog,
 } from "../lib/types";
 
 interface AppStore {
@@ -20,6 +21,8 @@ interface AppStore {
   activity: ActivityBucket[];
   claudeInstallation: ClaudeInstallation | null;
   claudeRuntimeConfig: ClaudeRuntimeConfig | null;
+  upstreamModelCatalog: UpstreamModelCatalog | null;
+  upstreamModelsLoading: boolean;
   claudeDetectionLogs: ClaudeDetectionLog[];
   claudeFingerprintSnapshot: ClaudeFingerprintSnapshot | null;
   proxyStatus: ProxyStatus | null;
@@ -34,6 +37,7 @@ interface AppStore {
   refreshStatus: () => Promise<void>;
   saveProfile: (profile: ProfileInput) => Promise<void>;
   refreshClaudeInstallation: () => Promise<void>;
+  refreshUpstreamModels: () => Promise<void>;
   testClaudeInstallation: (configuredPath: string) => Promise<void>;
   runProbeNow: () => Promise<void>;
   startScheduler: () => Promise<void>;
@@ -84,6 +88,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   activity: [],
   claudeInstallation: null,
   claudeRuntimeConfig: null,
+  upstreamModelCatalog: null,
+  upstreamModelsLoading: false,
   claudeDetectionLogs: [],
   claudeFingerprintSnapshot: null,
   proxyStatus: null,
@@ -121,6 +127,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         anchorTime: Date.now(),
         loading: false,
       });
+      void get().refreshUpstreamModels();
     } catch (error) {
       set({ error: String(error), loading: false });
     }
@@ -151,6 +158,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         busy: false,
         pendingAction: null,
       });
+      void get().refreshUpstreamModels();
       await get().refreshStatus();
     } catch (error) {
       set({ error: String(error), busy: false, pendingAction: null });
@@ -168,6 +176,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({ claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, busy: false, pendingAction: null });
     } catch (error) {
       set({ error: String(error), busy: false, pendingAction: null });
+    }
+  },
+
+  async refreshUpstreamModels() {
+    if (get().upstreamModelsLoading) return;
+    set({ upstreamModelsLoading: true });
+    try {
+      const upstreamModelCatalog = await api.getUpstreamModels();
+      set({ upstreamModelCatalog, upstreamModelsLoading: false });
+    } catch (error) {
+      set({ error: String(error), upstreamModelsLoading: false });
     }
   },
 

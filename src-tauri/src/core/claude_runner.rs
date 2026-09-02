@@ -169,6 +169,7 @@ async fn run_probe_with_binary(
     unreachable!("probe command mode list is non-empty")
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_probe_attempt(
     profile: &Profile,
     binary: &str,

@@ -131,6 +131,40 @@ export function formatBytes(value?: number) {
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
+export function formatUpdateDetails(body?: string) {
+  if (!body?.trim()) return "暂无更新详情";
+
+  const details = body
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map(cleanUpdateDetailLine)
+    .filter((line) => line && !isReleaseMetadataLine(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return details || "暂无更新详情";
+}
+
+function cleanUpdateDetailLine(line: string) {
+  return line
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\bgithub\b/gi, "")
+    .replace(/^\s{0,3}#{1,6}\s*/, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/[*_`~]/g, "")
+    .trimEnd();
+}
+
+function isReleaseMetadataLine(line: string) {
+  const value = line.trim().replace(/^[-+•]\s*/, "");
+  return /^(?:更新说明|更新日志|full\s+changelog|changelog|release\s+notes?|compare|source\s+code|downloads?|checksums?)(?:\s*[:：-]|$)/i.test(
+    value,
+  );
+}
+
 export function normalizeUpdaterError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const compactMessage = message.trim();
@@ -156,7 +190,7 @@ function createBrowserMockUpdate(): PendingAppUpdate | null {
     version: "0.1.8-test",
     currentVersion: "0.1.7",
     date: new Date().toISOString(),
-    body: "测试更新：验证发现更新、下载进度、安装完成和重启按钮状态。",
+    body: "优化模型列表与版本更新体验。\n修复已知问题。",
     async downloadAndInstall(onProgress) {
       const contentLength = 12 * 1024 * 1024;
       let downloadedBytes = 0;

@@ -1,10 +1,9 @@
-import { CheckCircle2, Download, LoaderCircle, RefreshCw, RotateCcw, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, Download, LoaderCircle, RefreshCw, RotateCcw, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import type { AppUpdaterController } from "../lib/useAppUpdater";
-import { UPDATE_CHECK_INTERVAL_MS } from "../lib/updatePolicy";
-import { formatBytes } from "../lib/updater";
-import { cn, formatLongDuration } from "../lib/utils";
+import { formatBytes, formatUpdateDetails } from "../lib/updater";
+import { cn } from "../lib/utils";
 
 export function UpdateStatusButton({ updater }: { updater: AppUpdaterController }) {
   const Icon =
@@ -70,12 +69,6 @@ export function UpdatePanel({ updater }: { updater: AppUpdaterController }) {
           <X className="h-4 w-4" />
         </button>
 
-        <div className="update-panel-scan" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-
         <div className="relative z-10 grid gap-5">
           <div className="flex min-w-0 items-start gap-4">
             <div className="update-panel-icon">
@@ -90,33 +83,29 @@ export function UpdatePanel({ updater }: { updater: AppUpdaterController }) {
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--app-text-soft)]">
-                应用更新
-              </p>
               <h2
                 id="update-panel-title"
-                className="mt-1 text-xl font-black tracking-normal text-[var(--app-text)]"
+                className="text-xl font-black tracking-normal text-[var(--app-text)]"
               >
                 {panelTitle(updater)}
               </h2>
-              <p className="mt-2 max-w-[560px] text-sm font-semibold leading-6 text-[var(--app-text-muted)]">
-                {panelCopy(updater)}
-              </p>
             </div>
           </div>
 
           {updater.update ? (
-            <div className="update-version-grid">
+            <div className="update-version-flow">
               <VersionFact label="当前版本" value={updater.update.currentVersion} />
-              <VersionFact label="最新版本" value={updater.update.version} accent />
-              <VersionFact label="检查间隔" value={formatLongDuration(UPDATE_CHECK_INTERVAL_MS)} />
+              <div className="update-version-arrow" aria-hidden="true">
+                <ArrowRight className="h-4 w-4" />
+              </div>
+              <VersionFact label="更新版本" value={updater.update.version} accent />
             </div>
           ) : null}
 
-          {updater.update?.body ? (
+          {updater.update ? (
             <div className="update-notes">
-              <div className="update-notes-label">更新说明</div>
-              <p>{updater.update.body}</p>
+              <div className="update-notes-label">更新详情</div>
+              <p>{formatUpdateDetails(updater.update.body)}</p>
             </div>
           ) : null}
 
@@ -213,26 +202,13 @@ function updateStatusLabel(updater: AppUpdaterController) {
 
 function panelTitle(updater: AppUpdaterController) {
   if (updater.state === "checking") return "正在检查更新";
-  if (updater.state === "available") return "发现可用更新";
+  if (updater.state === "available") return "版本更新";
   if (updater.state === "downloading") return "正在下载更新";
   if (updater.state === "installing") return "正在安装更新";
   if (updater.state === "installed") return "更新已准备好";
   if (updater.state === "latest") return "当前已是最新版本";
   if (updater.state === "error") return "更新检查失败";
-  return "应用更新";
-}
-
-function panelCopy(updater: AppUpdaterController) {
-  if (updater.state === "checking") return "正在检查是否有可用的新版本。";
-  if (updater.state === "available" && updater.update) {
-    return `可以从 ${updater.update.currentVersion} 更新到 ${updater.update.version}，下载完成后会自动安装。`;
-  }
-  if (updater.state === "downloading") return "下载进度会根据真实字节数刷新，完成后自动进入安装步骤。";
-  if (updater.state === "installing") return "正在写入新版本，请保持应用运行。完成后按提示重启即可生效。";
-  if (updater.state === "installed") return "更新包已完成安装，重启应用后新版本会生效。";
-  if (updater.state === "latest") return "没有发现比当前版本更新的应用版本。";
-  if (updater.state === "error") return "可能是网络暂时不可用，请稍后再试。";
-  return "应用会在后台定期检查是否发布了新版本。";
+  return "版本更新";
 }
 
 function progressLabel(updater: AppUpdaterController) {

@@ -93,7 +93,7 @@ pub async fn switch_all_fingerprints(
         proxy.start().await?;
         let direct_route = sync_direct_claude_route(15800);
         if let Some(error) = direct_route.error.as_deref() {
-            crate::system::app_log::error("fingerprint.direct_route", error.to_string());
+            crate::system::app_log::error("fingerprint.direct_route", error);
         }
         let mut status = proxy.status();
         status.error = direct_route.error;

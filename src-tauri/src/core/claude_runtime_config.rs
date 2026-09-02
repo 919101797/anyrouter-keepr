@@ -56,6 +56,14 @@ pub fn resolve_claude_key_value(
     token_kind: &str,
     token: &str,
 ) -> Option<String> {
+    resolve_claude_credential(key_summary, token_kind, token).map(|candidate| candidate.value)
+}
+
+pub fn resolve_claude_credential(
+    key_summary: Option<&str>,
+    token_kind: &str,
+    token: &str,
+) -> Option<ClaudeCredential> {
     let expected = key_summary.and_then(clean_value);
     let mut candidates = Vec::new();
     if let Some(value) = clean_value(token) {
@@ -74,7 +82,16 @@ pub fn resolve_claude_key_value(
                 .as_deref()
                 .is_none_or(|summary| format_secret_candidate(candidate) == summary)
         })
-        .map(|candidate| candidate.value)
+        .map(|candidate| ClaudeCredential {
+            value: candidate.value,
+            kind: candidate.kind,
+        })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaudeCredential {
+    pub value: String,
+    pub kind: String,
 }
 
 #[derive(Debug, Clone)]

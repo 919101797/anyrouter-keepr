@@ -394,6 +394,21 @@ pub struct ClaudeRuntimeConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpstreamModel {
+    pub id: String,
+    pub display_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpstreamModelCatalog {
+    pub checked_at: String,
+    pub upstream_url: String,
+    pub upstream_source: String,
+    pub models: Vec<UpstreamModel>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClaudeDetectionLog {
     pub id: String,
     pub checked_at: String,

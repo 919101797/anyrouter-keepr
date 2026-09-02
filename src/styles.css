@@ -672,46 +672,18 @@ button > svg {
   box-shadow: 0 14px 34px color-mix(in srgb, var(--app-focus) 16%, transparent);
 }
 
-.update-panel-scan {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.update-panel-scan span {
-  position: absolute;
-  left: -20%;
-  width: 140%;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--app-focus) 42%, transparent),
-    transparent
-  );
-  opacity: 0.5;
-  animation: update-panel-scan 4.8s linear infinite;
-}
-
-.update-panel-scan span:nth-child(1) {
-  top: 18%;
-}
-
-.update-panel-scan span:nth-child(2) {
-  top: 52%;
-  animation-delay: 1.5s;
-}
-
-.update-panel-scan span:nth-child(3) {
-  top: 78%;
-  animation-delay: 3s;
-}
-
-.update-version-grid {
+.update-version-flow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+.update-version-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-text-soft);
 }
 
 .update-version-fact {
@@ -856,30 +828,18 @@ button > svg {
   }
 }
 
-@keyframes update-panel-scan {
-  from {
-    transform: translateY(-24px);
-    opacity: 0;
-  }
-
-  20%,
-  70% {
-    opacity: 0.5;
-  }
-
-  to {
-    transform: translateY(28px);
-    opacity: 0;
-  }
-}
-
 @media (max-width: 640px) {
   .update-panel {
     padding: 20px;
   }
 
-  .update-version-grid {
+  .update-version-flow {
     grid-template-columns: 1fr;
+  }
+
+  .update-version-arrow {
+    height: 20px;
+    transform: rotate(90deg);
   }
 }
 
