@@ -16,6 +16,7 @@ const maxPagesFileSizeBytes = Number.parseInt(
   10,
 );
 const releaseTag = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME || "";
+const releaseNotesFile = process.env.RELEASE_NOTES_FILE || "";
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL || "https://anyrouter-claude-keeper.pages.dev").replace(
   /\/+$/,
   "",
@@ -35,6 +36,18 @@ if (!existsSync(latestPath)) {
 }
 
 const latest = JSON.parse(readFileSync(latestPath, "utf8"));
+if (releaseNotesFile) {
+  if (!existsSync(releaseNotesFile)) {
+    throw new Error(`Release notes file does not exist: ${releaseNotesFile}`);
+  }
+
+  const releaseNotes = readFileSync(releaseNotesFile, "utf8").trim();
+  if (!releaseNotes) {
+    throw new Error(`Release notes file is empty: ${releaseNotesFile}`);
+  }
+
+  latest.notes = releaseNotes;
+}
 const assetFiles = readdirSync(sourceDir, { withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name !== "latest.json")
   .map((entry) => entry.name);

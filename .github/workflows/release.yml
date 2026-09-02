@@ -16,6 +16,11 @@ on:
         options:
           - "true"
           - "false"
+      refresh_updater_feed:
+        description: "Refresh the updater feed from existing release assets without rebuilding"
+        required: true
+        default: false
+        type: boolean
   push:
     tags:
       - "**"
@@ -27,6 +32,7 @@ jobs:
   prepare-release:
     name: Prepare draft release
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.refresh_updater_feed != true }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
@@ -268,7 +274,7 @@ jobs:
         with:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: "AnyRouter Keeper ${{ env.RELEASE_TAG }}"
-          releaseBody: "详见本版本 GitHub Release 页面中的中文更新日志。"
+          releaseBody: "本版本包含功能更新与体验改进。"
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
@@ -280,7 +286,7 @@ jobs:
     name: Publish complete release
     runs-on: ubuntu-latest
     needs: release
-    if: ${{ startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_draft == 'false') }}
+    if: ${{ always() && ((github.event_name == 'workflow_dispatch' && inputs.refresh_updater_feed == true) || ((startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_draft == 'false')) && needs.release.result == 'success')) }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
@@ -385,6 +391,7 @@ jobs:
           SOURCE_DIR: ${{ runner.temp }}/release-assets
           OUTPUT_DIR: ${{ runner.temp }}/cloudflare-pages
           PUBLIC_BASE_URL: https://anyrouter-claude-keeper.pages.dev
+          RELEASE_NOTES_FILE: ${{ runner.temp }}/release-notes.md
         run: node scripts/prepare-cloudflare-updater.mjs
 
       - name: Deploy updater feed to Cloudflare Pages
@@ -408,8 +415,19 @@ jobs:
           const fs = require("fs");
           const metadata = JSON.parse(fs.readFileSync(process.env.LATEST_JSON, "utf8"));
           const platforms = Object.values(metadata.platforms || {});
+          const expectedVersion = (process.env.RELEASE_TAG || "").replace(/^v/, "");
           if (platforms.length === 0) {
             console.error("Cloudflare latest.json has no platforms.");
+            process.exit(1);
+          }
+
+          if (metadata.version !== expectedVersion) {
+            console.error(`Cloudflare latest.json version ${metadata.version} does not match ${expectedVersion}.`);
+            process.exit(1);
+          }
+
+          if (!metadata.notes || /github/i.test(metadata.notes)) {
+            console.error("Cloudflare latest.json must contain product-facing update details.");
             process.exit(1);
           }
 
