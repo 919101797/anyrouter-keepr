@@ -31,7 +31,7 @@ impl EventBuffer {
 
     pub fn drain(&mut self) -> Vec<ProbeEvent> {
         self.last_flush = Instant::now();
-        self.pending.drain(..).collect()
+        std::mem::take(&mut self.pending)
     }
 
     pub fn should_flush(&self) -> bool {
