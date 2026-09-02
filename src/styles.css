@@ -229,8 +229,7 @@ button > svg {
 :root[data-app-theme="liquid-glass-light"] .panel-ring {
   border-color: rgba(255, 255, 255, 0.58) !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34)),
-    rgba(255, 255, 255, 0.3) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34)), rgba(255, 255, 255, 0.3) !important;
   box-shadow:
     0 24px 70px rgba(45, 58, 51, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.88);
@@ -261,8 +260,7 @@ button > svg {
 :root[data-app-theme="liquid-glass-light"] .history-filter-active {
   border-color: rgba(207, 255, 53, 0.5) !important;
   background:
-    linear-gradient(180deg, rgba(207, 255, 53, 0.5), rgba(255, 255, 255, 0.34)),
-    rgba(255, 255, 255, 0.58) !important;
+    linear-gradient(180deg, rgba(207, 255, 53, 0.5), rgba(255, 255, 255, 0.34)), rgba(255, 255, 255, 0.58) !important;
   color: #101612 !important;
   box-shadow:
     0 14px 30px rgba(47, 58, 52, 0.12),
@@ -967,8 +965,7 @@ button > svg {
 :root[data-app-theme="liquid-glass-light"] .select-content {
   border-color: rgba(255, 255, 255, 0.78) !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78)),
-    rgba(255, 255, 255, 0.88) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78)), rgba(255, 255, 255, 0.88) !important;
   color: #111614 !important;
   box-shadow:
     0 24px 64px rgba(32, 48, 42, 0.2),

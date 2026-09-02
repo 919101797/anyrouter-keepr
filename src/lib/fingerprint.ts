@@ -77,7 +77,8 @@ export function fingerprintItemDetail(
   switch (itemKey) {
     case "x-stainless-os":
       if (proxyRunning && targetOs) return `代理生效: ${targetOs}（本机: ${fingerprint.stainless_os}）`;
-      if (targetOs && targetOs !== fingerprint.stainless_os) return `目标: ${targetOs}（未启动，本机: ${fingerprint.stainless_os}）`;
+      if (targetOs && targetOs !== fingerprint.stainless_os)
+        return `目标: ${targetOs}（未启动，本机: ${fingerprint.stainless_os}）`;
       return fingerprint.stainless_os;
     case "x-stainless-arch":
       if (proxyRunning && targetArch) return `代理生效: ${targetArch}（本机: ${fingerprint.stainless_arch}）`;
@@ -225,9 +226,7 @@ export function diagnoseFingerprint(
     {
       item: FINGERPRINT_MATRIX[4],
       status: proxyRunning ? "safe" : "neutral",
-      detail: proxyRunning
-        ? "代理自动剥离非 null 的 context_management"
-        : "未代理时由 Claude Code 自行控制",
+      detail: proxyRunning ? "代理自动剥离非 null 的 context_management" : "未代理时由 Claude Code 自行控制",
     },
   ];
 

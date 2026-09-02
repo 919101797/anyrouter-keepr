@@ -25,7 +25,7 @@ Themes:
 The root document should expose a single app theme attribute:
 
 ```html
-<html data-app-theme="liquid-glass-light">
+<html data-app-theme="liquid-glass-light"></html>
 ```
 
 The existing `data-theme` / `data-theme-mode` approach can be migrated or bridged during implementation, but the final public styling contract should be `data-app-theme`.

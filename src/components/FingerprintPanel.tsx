@@ -1,14 +1,9 @@
-import {
-  History,
-  Play,
-  RefreshCw,
-  RotateCcw,
-  Server,
-  Shuffle,
-  Square,
-  Trash2,
-} from "lucide-react";
-import type { ClaudeFingerprintSnapshot, ClaudeFingerprintHistoryEntry, ProxyStatus } from "../lib/fingerprint";
+import { History, Play, RefreshCw, RotateCcw, Server, Shuffle, Square, Trash2 } from "lucide-react";
+import type {
+  ClaudeFingerprintSnapshot,
+  ClaudeFingerprintHistoryEntry,
+  ProxyStatus,
+} from "../lib/fingerprint";
 import {
   FINGERPRINT_MATRIX,
   fingerprintSourceLabel,
@@ -127,15 +122,10 @@ export function FingerprintPanel({
           <div className="space-y-1.5">
             {current ? (
               FINGERPRINT_MATRIX.map((item) => (
-                <div
-                  key={item.key}
-                  className="rounded-[7px] border border-[#dce7e1] bg-[#f8fbf9] px-3 py-2"
-                >
+                <div key={item.key} className="rounded-[7px] border border-[#dce7e1] bg-[#f8fbf9] px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold text-[#17211d]">{item.label}</span>
-                    <span className="shrink-0 text-[10px] font-medium text-[#66796f]">
-                      {item.location}
-                    </span>
+                    <span className="shrink-0 text-[10px] font-medium text-[#66796f]">{item.location}</span>
                   </div>
                   <div className="mt-1 text-[11px] font-medium leading-4 text-[#5b6f64]">
                     {fingerprintItemDetail(item.key, current, proxyStatus)}
@@ -198,7 +188,9 @@ export function FingerprintPanel({
               </div>
               <ul className="mt-1.5 space-y-0.5 text-xs font-medium leading-5 text-[#2d6b46]">
                 <li>Claude Code → 127.0.0.1:{proxyStatus?.listen_port ?? 15800}</li>
-                <li className="break-all">上游 → {upstreamUrl}（{upstreamMode}）</li>
+                <li className="break-all">
+                  上游 → {upstreamUrl}（{upstreamMode}）
+                </li>
                 <li>出站 → 系统代理 / Clash TUN</li>
                 <li>X-Stainless-OS → {targetOs}</li>
                 <li>X-Stainless-Arch → {targetArch}</li>
@@ -259,9 +251,7 @@ function TargetChip({
 }) {
   return (
     <div className="rounded-[7px] border border-[#dce7e1] bg-[#f8fbf9] px-3 py-2">
-      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#72847b]">
-        {label}
-      </div>
+      <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#72847b]">{label}</div>
       <div className="mt-1.5 flex gap-1">
         {options.map((opt) => (
           <button
@@ -270,9 +260,7 @@ function TargetChip({
             disabled={disabled}
             onClick={() => onChange(opt)}
             className={`rounded-[5px] px-2.5 py-1 text-xs font-semibold transition-colors ${
-              value === opt
-                ? "bg-[#17211d] text-white"
-                : "bg-[#eef4f1] text-[#5b6f64] hover:bg-[#dce7e1]"
+              value === opt ? "bg-[#17211d] text-white" : "bg-[#eef4f1] text-[#5b6f64] hover:bg-[#dce7e1]"
             } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
           >
             {opt}
@@ -315,10 +303,7 @@ function HistoryRow({
             <Badge variant={active ? "success" : "muted"}>
               {active ? "当前" : fingerprintSourceLabel(entry.source)}
             </Badge>
-            <span
-              className="text-xs font-semibold text-[#66796f]"
-              title={formatClock(entry.captured_at)}
-            >
+            <span className="text-xs font-semibold text-[#66796f]" title={formatClock(entry.captured_at)}>
               {formatRelativeTime(entry.captured_at)}
             </span>
           </div>
@@ -343,14 +328,7 @@ function HistoryRow({
           >
             <RotateCcw />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            disabled={disabled}
-            onClick={remove}
-            title="删除"
-          >
+          <Button type="button" variant="ghost" size="icon" disabled={disabled} onClick={remove} title="删除">
             <Trash2 />
           </Button>
         </div>

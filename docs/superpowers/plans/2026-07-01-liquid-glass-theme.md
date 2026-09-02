@@ -24,6 +24,7 @@
 ## Task 1: Add App Theme Model
 
 **Files:**
+
 - Create: `src/lib/appTheme.test.ts`
 - Create: `src/lib/appTheme.ts`
 
@@ -199,6 +200,7 @@ git commit -m "feat: add app theme model"
 ## Task 2: Add App Theme Hook
 
 **Files:**
+
 - Modify: `src/lib/appTheme.test.ts`
 - Modify: `src/lib/appTheme.ts`
 - Create: `src/lib/useAppTheme.ts`
@@ -208,16 +210,16 @@ git commit -m "feat: add app theme model"
 Append these tests inside `describe("app theme helpers", () => { ... })` in `src/lib/appTheme.test.ts`:
 
 ```ts
-  it("resolves stored app theme before legacy values", () => {
-    expect(resolveStoredAppTheme("liquid-glass-light", "dark", false)).toBe("liquid-glass-light");
-    expect(resolveStoredAppTheme("classic-dark", "light", false)).toBe("classic-dark");
-  });
+it("resolves stored app theme before legacy values", () => {
+  expect(resolveStoredAppTheme("liquid-glass-light", "dark", false)).toBe("liquid-glass-light");
+  expect(resolveStoredAppTheme("classic-dark", "light", false)).toBe("classic-dark");
+});
 
-  it("resolves legacy theme when no app theme exists", () => {
-    expect(resolveStoredAppTheme(null, "dark", false)).toBe("classic-dark");
-    expect(resolveStoredAppTheme(null, "system", true)).toBe("classic-dark");
-    expect(resolveStoredAppTheme(null, "system", false)).toBe("classic-light");
-  });
+it("resolves legacy theme when no app theme exists", () => {
+  expect(resolveStoredAppTheme(null, "dark", false)).toBe("classic-dark");
+  expect(resolveStoredAppTheme(null, "system", true)).toBe("classic-dark");
+  expect(resolveStoredAppTheme(null, "system", false)).toBe("classic-light");
+});
 ```
 
 Update the import list in `src/lib/appTheme.test.ts`:
@@ -346,6 +348,7 @@ git commit -m "feat: add app theme hook"
 ## Task 3: Replace Cycle Button With Theme Picker
 
 **Files:**
+
 - Create: `src/components/ThemePicker.tsx`
 - Modify: `src/App.tsx`
 
@@ -434,25 +437,25 @@ import { useAppStore } from "./store/appStore";
 Replace this line:
 
 ```tsx
-  const { mode: themeMode, setThemeMode } = useThemeMode();
+const { mode: themeMode, setThemeMode } = useThemeMode();
 ```
 
 with:
 
 ```tsx
-  const { theme, setTheme } = useAppTheme();
+const { theme, setTheme } = useAppTheme();
 ```
 
 Replace the theme button usage:
 
 ```tsx
-              <ThemeCycleButton mode={themeMode} onChange={setThemeMode} />
+<ThemeCycleButton mode={themeMode} onChange={setThemeMode} />
 ```
 
 with:
 
 ```tsx
-              <ThemePicker theme={theme} onThemeChange={setTheme} />
+<ThemePicker theme={theme} onThemeChange={setTheme} />
 ```
 
 Remove the `ThemeCycleButton` and `nextThemeMode` functions from `src/App.tsx`.
@@ -515,6 +518,7 @@ git commit -m "feat: replace theme cycle with theme picker"
 ## Task 4: Add Liquid Glass Backdrop Component
 
 **Files:**
+
 - Create: `src/components/LiquidGlassBackdrop.tsx`
 - Modify: `src/App.tsx`
 
@@ -645,6 +649,7 @@ git commit -m "feat: add liquid glass backdrop"
 ## Task 5: Add Theme Tokens And Classic Bridges
 
 **Files:**
+
 - Modify: `src/styles.css`
 
 - [ ] **Step 1: Add app theme token blocks**
@@ -761,6 +766,7 @@ git commit -m "feat: add app theme style tokens"
 ## Task 6: Style Liquid Glass Shell And Controls
 
 **Files:**
+
 - Modify: `src/App.tsx`
 - Modify: `src/styles.css`
 
@@ -844,8 +850,7 @@ Append this block to `src/styles.css`:
 :root[data-app-theme="liquid-glass-light"] .panel-ring {
   border-color: rgba(255, 255, 255, 0.58) !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34)),
-    rgba(255, 255, 255, 0.3) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.34)), rgba(255, 255, 255, 0.3) !important;
   box-shadow:
     0 24px 70px rgba(45, 58, 51, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.88);
@@ -892,6 +897,7 @@ git commit -m "feat: style liquid glass shell"
 ## Task 7: Manual Verification And Final Cleanup
 
 **Files:**
+
 - Modify after inspection: `src/styles.css`
 - Modify after inspection: `src/App.tsx`
 

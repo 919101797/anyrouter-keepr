@@ -279,22 +279,58 @@ export const api = {
   },
 
   async getProxyStatus(): Promise<ProxyStatus> {
-    if (!inTauri) return { running: false, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    if (!inTauri)
+      return {
+        running: false,
+        listen_port: 15800,
+        target_os: "Windows",
+        target_arch: "x64",
+        upstream_url: "https://anyrouter.top",
+        dynamic_upstream: true,
+        error: null,
+      };
     return invoke("get_proxy_status");
   },
 
   async startProxy(): Promise<ProxyStatus> {
-    if (!inTauri) return { running: true, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    if (!inTauri)
+      return {
+        running: true,
+        listen_port: 15800,
+        target_os: "Windows",
+        target_arch: "x64",
+        upstream_url: "https://anyrouter.top",
+        dynamic_upstream: true,
+        error: null,
+      };
     return invoke("start_proxy");
   },
 
   async stopProxy(): Promise<ProxyStatus> {
-    if (!inTauri) return { running: false, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    if (!inTauri)
+      return {
+        running: false,
+        listen_port: 15800,
+        target_os: "Windows",
+        target_arch: "x64",
+        upstream_url: "https://anyrouter.top",
+        dynamic_upstream: true,
+        error: null,
+      };
     return invoke("stop_proxy");
   },
 
   async setProxyTarget(targetOs: string, targetArch: string): Promise<ProxyStatus> {
-    if (!inTauri) return { running: false, listen_port: 15800, target_os: targetOs, target_arch: targetArch, upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null };
+    if (!inTauri)
+      return {
+        running: false,
+        listen_port: 15800,
+        target_os: targetOs,
+        target_arch: targetArch,
+        upstream_url: "https://anyrouter.top",
+        dynamic_upstream: true,
+        error: null,
+      };
     return invoke("set_proxy_target", { targetOs, targetArch });
   },
 
@@ -325,7 +361,15 @@ export const api = {
             ...mockClaudeFingerprintSnapshot.history,
           ],
         },
-        proxy: { running: true, listen_port: 15800, target_os: "Windows", target_arch: "x64", upstream_url: "https://anyrouter.top", dynamic_upstream: true, error: null },
+        proxy: {
+          running: true,
+          listen_port: 15800,
+          target_os: "Windows",
+          target_arch: "x64",
+          upstream_url: "https://anyrouter.top",
+          dynamic_upstream: true,
+          error: null,
+        },
       };
     }
     return invoke("switch_all_fingerprints");

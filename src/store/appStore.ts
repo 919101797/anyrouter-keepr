@@ -65,15 +65,26 @@ async function readRuntimeSnapshot() {
 }
 
 async function readClaudeSnapshot() {
-  const [claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus] =
-    await Promise.all([
-      api.getClaudeInstallation(),
-      api.getClaudeRuntimeConfig(),
-      api.listClaudeDetectionLogs(20),
-      api.getClaudeFingerprintSnapshot(),
-      api.getProxyStatus(),
-    ]);
-  return { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus };
+  const [
+    claudeInstallation,
+    claudeRuntimeConfig,
+    claudeDetectionLogs,
+    claudeFingerprintSnapshot,
+    proxyStatus,
+  ] = await Promise.all([
+    api.getClaudeInstallation(),
+    api.getClaudeRuntimeConfig(),
+    api.listClaudeDetectionLogs(20),
+    api.getClaudeFingerprintSnapshot(),
+    api.getProxyStatus(),
+  ]);
+  return {
+    claudeInstallation,
+    claudeRuntimeConfig,
+    claudeDetectionLogs,
+    claudeFingerprintSnapshot,
+    proxyStatus,
+  };
 }
 
 async function readFullSnapshot() {
@@ -111,8 +122,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
         api.getActivitySummary(24),
         api.isAutostartEnabled(),
       ]);
-      const { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus } =
-        await readClaudeSnapshot();
+      const {
+        claudeInstallation,
+        claudeRuntimeConfig,
+        claudeDetectionLogs,
+        claudeFingerprintSnapshot,
+        proxyStatus,
+      } = await readClaudeSnapshot();
       set({
         profile,
         status,
@@ -146,8 +162,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ busy: true, pendingAction: "profile", error: null });
     try {
       const saved = await api.saveProfile(profile);
-      const { claudeInstallation, claudeRuntimeConfig, claudeDetectionLogs, claudeFingerprintSnapshot, proxyStatus } =
-        await readClaudeSnapshot();
+      const {
+        claudeInstallation,
+        claudeRuntimeConfig,
+        claudeDetectionLogs,
+        claudeFingerprintSnapshot,
+        proxyStatus,
+      } = await readClaudeSnapshot();
       set({
         profile: saved,
         claudeInstallation,

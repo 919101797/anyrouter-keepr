@@ -29,7 +29,10 @@
               : legacyTheme === "dark" || (legacyTheme === "system" && systemDark)
                 ? "classic-dark"
                 : "classic-light";
-          if (!storedAppTheme && (legacyTheme === "light" || legacyTheme === "dark" || legacyTheme === "system")) {
+          if (
+            !storedAppTheme &&
+            (legacyTheme === "light" || legacyTheme === "dark" || legacyTheme === "system")
+          ) {
             try {
               localStorage.setItem(appThemeKey, appTheme);
             } catch {
